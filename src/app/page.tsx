@@ -1,44 +1,45 @@
 import Link from "next/link";
 
-const menu = [
-  { href: "/cpu", title: "2 + 2 Quick Game", subtitle: "Two real players with two local seats", icon: "⚙️" },
-  { href: "/new", title: "Play", subtitle: "Start a pass-and-play game", icon: "🎲" },
-  { href: "/forge", title: "Map Forge", subtitle: "Generate & save balanced boards", icon: "🗺️" },
-  { href: "/themes", title: "Themes", subtitle: "Reskin every resource & tile", icon: "🎨" },
-  { href: "/boards", title: "Saved Boards", subtitle: "Replay your favorite maps", icon: "💾" },
+const links = [
+  { href: "/studio", title: "Play now", body: "Names, variants, and 2 humans + 2 CPU quick-start." },
+  { href: "/cpu", title: "CPU quick game", body: "Fast launch into a mixed human/bot match." },
+  { href: "/forge", title: "Map Forge", body: "Generate balanced boards and save your favorites." },
+  { href: "/image-forge", title: "Image Forge", body: "Upload a photo and spin a matching travel palette." },
+  { href: "/themes", title: "Themes", body: "Japan, Israel, Jewish Journey, and Hamsa Nomads." },
+  { href: "/boards", title: "Saved boards", body: "Replay boards you already liked." },
 ];
 
 export default function HomePage() {
   return (
-    <main className="game-shell mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-10">
-      <div className="relative z-10 mb-10 text-center">
-        <p className="text-6xl">⬡</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight">Hex Isles</h1>
-        <p className="mt-2 text-sm text-white/60">
-          Settle, trade, and build across themeable hex islands.
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 py-8">
+      <header className="mb-8 text-center">
+        <p className="mb-2 text-sm uppercase tracking-[0.25em] text-yellow-300/80">
+          Hex Isles
         </p>
-      </div>
+        <h1 className="text-3xl font-black tracking-tight text-white">
+          Flat board. 3D pieces. Ready to play.
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-white/65">
+          Mobile-first island trading with stunning themes, custom names, bots, and new special modes.
+        </p>
+      </header>
 
-      <nav className="relative z-10 space-y-3">
-        {menu.map((item) => (
+      <section className="grid grid-cols-2 gap-3">
+        {links.map((link) => (
           <Link
-            key={item.href}
-            href={item.href}
-            className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 transition active:scale-[0.98] active:bg-white/10"
+            key={link.href}
+            href={link.href}
+            className="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-yellow-400/40 hover:bg-white/10"
           >
-            <span className="text-3xl">{item.icon}</span>
-            <span>
-              <span className="block text-lg font-bold">{item.title}</span>
-              <span className="block text-xs text-white/60">{item.subtitle}</span>
-            </span>
+            <p className="text-base font-bold text-white">{link.title}</p>
+            <p className="mt-1 text-xs leading-5 text-white/60">{link.body}</p>
           </Link>
         ))}
-      </nav>
+      </section>
 
-      <p className="relative z-10 mt-10 text-center text-[11px] leading-relaxed text-white/35">
-        An original game inspired by classic hex resource-trading mechanics.
-        Not affiliated with or endorsed by any commercial board game.
-      </p>
+      <footer className="mt-8 text-center text-xs text-white/35">
+        Includes Japan, Israel, Jewish Journey, Hamsa Nomads, and Cities & Knights Lite.
+      </footer>
     </main>
   );
 }

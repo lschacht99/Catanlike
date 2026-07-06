@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { BoardProps } from "boardgame.io/react";
-import type { GameState, ResourceKey } from "@/types/game";
+import type { GameState, GameVariant, PlayerMode, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import {
   PLAYER_COLORS,
   PLAYER_NAMES,
+  TOKEN_PIPS,
   VICTORY_POINTS_TO_WIN,
   type BuildableKind,
 } from "@/game/constants";
 import {
+  canAfford,
+  getGeometry,
   pieceCounts,
   validBanditTiles,
   validCitySpots,
@@ -23,13 +26,21 @@ import HexBoard from "./HexBoard";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel from "./TradePanel";
-import GameScene3D from "@/three/scene/GameScene3D";
 
 export interface GameBoardProps extends BoardProps<GameState> {
   theme: Theme;
+  playerModes?: PlayerMode[];
+  variant?: GameVariant;
 }
 
-export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
+export default function GameBoard({
+  G,
+  ctx,
+  moves,
+  theme,
+  playerModes = [],
+  variant = "base",
+}: GameBoardProps) {
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
 
@@ -38,6 +49,7 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
   const resources = G.players[current].resources;
   const pieces = pieceCounts(G, current);
   const gameover = ctx.gameover as { winner: string } | undefined;
+  const currentIsCpu = playerModes[Number(current)] === "bot";
 
   // ----- what is tappable right now -----
   let highlightVertices: string[] = [];
@@ -47,6 +59,8 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
 
   if (gameover) {
     instruction = "";
+  } else if (currentIsCpu) {
+    instruction = `${PLAYER_NAMES[Number(current)]} is thinking…`;
   } else if (inSetup) {
     if (G.pendingSetupSettlement === null) {
       highlightVertices = validSettlementSpots(G, current, true);
@@ -77,7 +91,59 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
     city: validCitySpots(G, current).length > 0,
   };
 
+  useEffect(() => {
+    if (!currentIsCpu || gameover) return;
+
+    const timer = window.setTimeout(() => {
+      if (ctx.phase === "setup") {
+        if (G.pendingSetupSettlement === null) {
+          const spot = pickBestSettlement(G, current, validSettlementSpots(G, current, true));
+          if (spot) moves.placeSettlement(spot);
+        } else {
+          const road = pickBestRoad(G, current, validRoadSpots(G, current, true));
+          if (road) moves.placeRoad(road);
+        }
+        return;
+      }
+
+      if (!G.hasRolled) {
+        moves.rollDice();
+        return;
+      }
+
+      if (G.mustMoveBandit) {
+        const tile = pickBestBanditTile(G, current, validBanditTiles(G));
+        if (tile !== null) moves.moveBandit(tile);
+        return;
+      }
+
+      const hand = G.players[current].resources;
+      const city = pickBestCity(G, current, validCitySpots(G, current));
+      if (city && canAfford(hand, "city")) {
+        moves.buildCity(city);
+        return;
+      }
+
+      const settlement = pickBestSettlement(G, current, validSettlementSpots(G, current, false));
+      if (settlement && canAfford(hand, "settlement")) {
+        moves.buildSettlement(settlement);
+        return;
+      }
+
+      const road = pickBestRoad(G, current, validRoadSpots(G, current, false));
+      if (road && canAfford(hand, "road")) {
+        moves.buildRoad(road);
+        return;
+      }
+
+      moves.endTurn();
+    }, inSetup ? 420 : 650);
+
+    return () => window.clearTimeout(timer);
+  }, [G, ctx.phase, current, currentIsCpu, gameover, inSetup, moves]);
+
   function onVertexTap(id: string) {
+    if (currentIsCpu) return;
     if (inSetup) {
       moves.placeSettlement(id);
     } else if (buildMode === "settlement") {
@@ -90,6 +156,7 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
   }
 
   function onEdgeTap(id: string) {
+    if (currentIsCpu) return;
     if (inSetup) {
       moves.placeRoad(id);
     } else if (buildMode === "road") {
@@ -99,53 +166,64 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
   }
 
   function onTileTap(id: number) {
+    if (currentIsCpu) return;
     if (G.mustMoveBandit) moves.moveBandit(id);
   }
 
   const lastLog = G.log[G.log.length - 1];
+  const variantLabel = variant === "cities-knights" ? "Cities & Knights beta" : "Base game";
 
   return (
-    <div className="flex h-dvh flex-col bg-slate-950">
+    <div className="game-shell flex h-dvh flex-col overflow-hidden bg-slate-950">
+      <div className="ambient-orb ambient-orb-a" />
+      <div className="ambient-orb ambient-orb-b" />
+
       {/* Player strip */}
-      <header className="flex items-center gap-1.5 px-2 pb-1 pt-[calc(env(safe-area-inset-top)+8px)]">
-        {Object.keys(G.players).map((id) => {
-          const active = id === current;
-          return (
-            <div
-              key={id}
-              className={`flex flex-1 flex-col items-center rounded-xl border px-1 py-1 ${
-                active ? "border-yellow-400 bg-white/10" : "border-white/10 bg-white/5"
-              }`}
-            >
-              <span
-                className="text-xs font-bold"
-                style={{ color: PLAYER_COLORS[Number(id)] }}
+      <header className="relative z-10 shrink-0 px-2 pb-1 pt-[calc(env(safe-area-inset-top)+8px)]">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          {Object.keys(G.players).map((id) => {
+            const active = id === current;
+            const mode = playerModes[Number(id)] === "bot" ? "CPU" : "Human";
+            return (
+              <div
+                key={id}
+                className={`min-w-[5.4rem] flex-1 rounded-xl border px-2 py-1.5 ${
+                  active ? "border-yellow-400 bg-white/15 shadow-[0_0_24px_rgba(250,204,21,0.2)]" : "border-white/10 bg-white/5"
+                }`}
               >
-                {PLAYER_NAMES[Number(id)]}
-              </span>
-              <span className="text-[11px] text-white/70">
-                ⭐ {victoryPoints(G, id)} / {VICTORY_POINTS_TO_WIN}
-              </span>
-            </div>
-          );
-        })}
-        <Link
-          href="/"
-          className="rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-xs text-white/60"
-        >
-          Exit
-        </Link>
+                <div className="flex items-center justify-between gap-1">
+                  <span
+                    className="truncate text-xs font-black"
+                    style={{ color: PLAYER_COLORS[Number(id)] }}
+                  >
+                    {PLAYER_NAMES[Number(id)]}
+                  </span>
+                  <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px] uppercase text-white/55">
+                    {mode}
+                  </span>
+                </div>
+                <span className="block text-[11px] text-white/70">
+                  ⭐ {victoryPoints(G, id)} / {VICTORY_POINTS_TO_WIN}
+                </span>
+              </div>
+            );
+          })}
+          <Link
+            href="/"
+            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/70"
+          >
+            Exit
+          </Link>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2 px-1 text-[10px] uppercase tracking-[0.2em] text-white/35">
+          <span>{theme.name}</span>
+          <span>{variantLabel}</span>
+        </div>
       </header>
 
       {/* Board */}
-      <div className="relative min-h-0 flex-1">
-        <div className="absolute inset-0 hidden sm:block">
-          <GameScene3D board={G.board} theme={theme} lastRoll={G.lastRoll} />
-        </div>
-        <div className="absolute inset-0 sm:hidden">
-          <GameScene3D board={G.board} theme={theme} lastRoll={G.lastRoll} />
-        </div>
-        <div className="absolute inset-0 opacity-0">
+      <div className="relative z-10 min-h-0 flex-1 p-2 sm:p-3">
+        <div className="board-card relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20 shadow-2xl">
           <HexBoard
             board={G.board}
             theme={theme}
@@ -160,24 +238,24 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
             onTileTap={onTileTap}
             className="h-full w-full"
           />
+          {instruction && (
+            <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/65 px-3 py-1.5 text-center text-xs font-semibold text-yellow-300 shadow-lg backdrop-blur">
+              {instruction}
+            </div>
+          )}
+          {lastLog && (
+            <div className="pointer-events-none absolute bottom-3 left-3 max-w-[82%] rounded-xl bg-black/55 px-3 py-1.5 text-[11px] text-white/85 shadow-lg backdrop-blur">
+              {lastLog}
+            </div>
+          )}
         </div>
-        {instruction && (
-          <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-yellow-300 backdrop-blur">
-            {instruction}
-          </div>
-        )}
-        {lastLog && (
-          <div className="pointer-events-none absolute bottom-2 left-2 max-w-[70%] rounded-lg bg-black/50 px-2 py-1 text-[11px] text-white/80 backdrop-blur">
-            {lastLog}
-          </div>
-        )}
       </div>
 
       {/* Bottom drawer */}
-      <div className="rounded-t-2xl border-t border-white/10 bg-slate-900 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3">
+      <div className="relative z-10 shrink-0 rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur">
         <div className="mb-2 flex items-center justify-between">
           <span
-            className="text-sm font-bold"
+            className="text-sm font-black"
             style={{ color: PLAYER_COLORS[Number(current)] }}
           >
             {PLAYER_NAMES[Number(current)]}&rsquo;s turn
@@ -205,21 +283,21 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
             </div>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               <button
-                disabled={G.hasRolled || !!gameover}
+                disabled={currentIsCpu || G.hasRolled || !!gameover}
                 onClick={() => moves.rollDice()}
-                className="rounded-xl bg-yellow-500 py-3 text-sm font-bold text-slate-900 disabled:opacity-30"
+                className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30"
               >
                 🎲 Roll
               </button>
               <button
-                disabled={!G.hasRolled || G.mustMoveBandit || !!gameover}
+                disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover}
                 onClick={() => setShowTrade(true)}
                 className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30"
               >
                 Trade
               </button>
               <button
-                disabled={!G.hasRolled || G.mustMoveBandit || !!gameover}
+                disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover}
                 onClick={() => {
                   setBuildMode(null);
                   moves.endTurn();
@@ -269,4 +347,69 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
       )}
     </div>
   );
+}
+
+function tokenWeight(token: number | null): number {
+  return token ? TOKEN_PIPS[token] ?? 0 : 0;
+}
+
+function vertexScore(G: GameState, vertexId: string): number {
+  const geo = getGeometry(G.board);
+  const resources = new Set<string>();
+  let score = 0;
+
+  for (const tileId of geo.vertices[vertexId].tiles) {
+    const tile = G.board.tiles[tileId];
+    if (!tile || tile.resource === "desert") continue;
+    resources.add(tile.resource);
+    score += tokenWeight(tile.token) * 2;
+  }
+
+  return score + resources.size * 1.8;
+}
+
+function pickBestSettlement(G: GameState, _player: string, spots: string[]): string | null {
+  if (spots.length === 0) return null;
+  return [...spots].sort((a, b) => vertexScore(G, b) - vertexScore(G, a))[0];
+}
+
+function pickBestRoad(G: GameState, player: string, spots: string[]): string | null {
+  if (spots.length === 0) return null;
+  const geo = getGeometry(G.board);
+
+  return [...spots].sort((a, b) => {
+    const edgeA = geo.edges[a];
+    const edgeB = geo.edges[b];
+    const scoreA = Math.max(vertexScore(G, edgeA.a), vertexScore(G, edgeA.b));
+    const scoreB = Math.max(vertexScore(G, edgeB.a), vertexScore(G, edgeB.b));
+    const ownA = Number(G.buildings[edgeA.a]?.player === player || G.buildings[edgeA.b]?.player === player);
+    const ownB = Number(G.buildings[edgeB.a]?.player === player || G.buildings[edgeB.b]?.player === player);
+    return scoreB + ownB - (scoreA + ownA);
+  })[0];
+}
+
+function pickBestCity(G: GameState, _player: string, spots: string[]): string | null {
+  if (spots.length === 0) return null;
+  return [...spots].sort((a, b) => vertexScore(G, b) - vertexScore(G, a))[0];
+}
+
+function pickBestBanditTile(G: GameState, player: string, tileIds: number[]): number | null {
+  if (tileIds.length === 0) return null;
+  const geo = getGeometry(G.board);
+
+  return [...tileIds].sort((a, b) => banditScore(G, geo, player, b) - banditScore(G, geo, player, a))[0];
+}
+
+function banditScore(G: GameState, geo: ReturnType<typeof getGeometry>, player: string, tileId: number): number {
+  const tile = G.board.tiles[tileId];
+  let score = tokenWeight(tile?.token ?? null);
+
+  for (const vertex of Object.values(geo.vertices)) {
+    if (!vertex.tiles.includes(tileId)) continue;
+    const building = G.buildings[vertex.id];
+    if (!building) continue;
+    score += building.player === player ? -4 : 6;
+  }
+
+  return score;
 }

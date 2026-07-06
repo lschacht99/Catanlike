@@ -12,6 +12,7 @@ import {
   moveBandit,
   placeRoad,
   placeSettlement,
+  playerTrade,
   rollDice,
 } from "./moves";
 
@@ -55,14 +56,11 @@ export function createHexIslesGame(
 ): Game<GameState> {
   return {
     name: "hex-isles",
-
     setup: () => initialState(board, numPlayers, options),
-
     endIf: ({ G }) => {
       const w = winner(G);
       return w !== null ? { winner: w } : undefined;
     },
-
     phases: {
       setup: {
         start: true,
@@ -79,7 +77,6 @@ export function createHexIslesGame(
         endIf: ({ G }) => G.setupStep >= 2 * G.numPlayers,
         next: "play",
       },
-
       play: {
         moves: {
           rollDice,
@@ -89,6 +86,7 @@ export function createHexIslesGame(
           buildCity,
           buildKnight,
           bankTrade,
+          playerTrade,
           endTurn,
         },
         turn: {

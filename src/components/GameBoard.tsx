@@ -23,6 +23,7 @@ import HexBoard from "./HexBoard";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel from "./TradePanel";
+import GameScene3D from "@/three/scene/GameScene3D";
 
 export interface GameBoardProps extends BoardProps<GameState> {
   theme: Theme;
@@ -138,20 +139,28 @@ export default function GameBoard({ G, ctx, moves, theme }: GameBoardProps) {
 
       {/* Board */}
       <div className="relative min-h-0 flex-1">
-        <HexBoard
-          board={G.board}
-          theme={theme}
-          buildings={G.buildings}
-          roads={G.roads}
-          banditTile={G.banditTile}
-          highlightVertices={highlightVertices}
-          highlightEdges={highlightEdges}
-          highlightTiles={highlightTiles}
-          onVertexTap={onVertexTap}
-          onEdgeTap={onEdgeTap}
-          onTileTap={onTileTap}
-          className="h-full w-full"
-        />
+        <div className="absolute inset-0 hidden sm:block">
+          <GameScene3D board={G.board} theme={theme} lastRoll={G.lastRoll} />
+        </div>
+        <div className="absolute inset-0 sm:hidden">
+          <GameScene3D board={G.board} theme={theme} lastRoll={G.lastRoll} />
+        </div>
+        <div className="absolute inset-0 opacity-0">
+          <HexBoard
+            board={G.board}
+            theme={theme}
+            buildings={G.buildings}
+            roads={G.roads}
+            banditTile={G.banditTile}
+            highlightVertices={highlightVertices}
+            highlightEdges={highlightEdges}
+            highlightTiles={highlightTiles}
+            onVertexTap={onVertexTap}
+            onEdgeTap={onEdgeTap}
+            onTileTap={onTileTap}
+            className="h-full w-full"
+          />
+        </div>
         {instruction && (
           <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-yellow-300 backdrop-blur">
             {instruction}

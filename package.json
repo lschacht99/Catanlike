@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "pages:build": "GITHUB_PAGES=true NEXT_PUBLIC_BASE_PATH=/Catanlike next build",
+    "start": "node scripts/serve-static.mjs",
     "lint": "next lint",
     "test": "vitest run"
   },

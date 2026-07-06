@@ -19,10 +19,10 @@ Other commands:
 ```bash
 npm test           # vitest — generator + rules unit tests
 npm run build      # production build
-npm start          # serve the production build
+npm start          # serve the static export from ./out
 ```
 
-Open it on a phone (or a narrow browser window), tap **Play**, pick 3–4
+Open it on a phone (or a narrow browser window), tap **Play**, pick 2–4
 players and a theme, and pass the phone around.
 
 ## What's playable (MVP)
@@ -50,7 +50,7 @@ players and a theme, and pass the phone around.
 
 This repo is configured for GitHub Pages using Next.js static export and the official Pages GitHub Actions flow:
 
-1. Push to `main`.
+1. Push or merge to `main`.
 2. In the GitHub repo, open **Settings → Pages**.
 3. Set **Build and deployment → Source** to **GitHub Actions**.
 4. Wait for the **Deploy static site to GitHub Pages** workflow to finish.
@@ -62,7 +62,13 @@ For this repository name, the manual local Pages build is:
 npm run pages:build
 ```
 
-The workflow sets `NEXT_PUBLIC_BASE_PATH` to `/${{ github.event.repository.name }}` so links, scripts, styles, manifest, and icons work from a GitHub Pages subpath.
+To preview the exact static export locally after `npm run pages:build`, run:
+
+```bash
+npm start
+```
+
+The workflow sets `NEXT_PUBLIC_BASE_PATH` to the repository name prefixed with a slash, for example `/Catanlike`, so links, scripts, styles, manifest, and icons work from a GitHub Pages subpath.
 
 ## The one rule that matters: themes never touch rules
 

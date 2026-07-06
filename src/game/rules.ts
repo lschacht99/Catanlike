@@ -46,7 +46,7 @@ export function pieceCounts(G: GameState, player: string) {
     else settlements++;
   }
   const roads = Object.values(G.roads).filter((p) => p === player).length;
-  const knights = Object.values(G.knights).filter((p) => p === player).length;
+  const knights = Object.values(G.knights ?? {}).filter((p) => p === player).length;
   return { roads, settlements, cities, knights };
 }
 
@@ -119,8 +119,9 @@ export function validCitySpots(G: GameState, player: string): string[] {
 export function validKnightSpots(G: GameState, player: string): string[] {
   if (G.variant !== "cities-knights") return [];
   if (pieceCounts(G, player).knights >= PIECE_LIMITS.knight) return [];
+  const knights = G.knights ?? {};
   return Object.entries(G.buildings)
-    .filter(([id, b]) => b.player === player && !G.knights[id])
+    .filter(([id, b]) => b.player === player && !knights[id])
     .map(([id]) => id);
 }
 

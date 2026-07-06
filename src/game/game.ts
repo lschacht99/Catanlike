@@ -1,10 +1,11 @@
 import type { Game } from "boardgame.io";
-import type { Board, GameState } from "@/types/game";
-import { emptyResources } from "./constants";
+import type { Board, GameState, GameVariant } from "@/types/game";
+import { emptyResources, PLAYER_NAMES } from "./constants";
 import { winner } from "./scoring";
 import {
   bankTrade,
   buildCity,
+  buildKnight,
   buildRoad,
   buildSettlement,
   endTurn,
@@ -14,12 +15,15 @@ import {
   rollDice,
 } from "./moves";
 
-/** Setup order: 0,1,...,n-1 then back n-1,...,0 (snake draft). */
 export function setupOrder(numPlayers: number, step: number): number {
   return step < numPlayers ? step : 2 * numPlayers - 1 - step;
 }
 
-function initialState(board: Board, numPlayers: number): GameState {
+function initialState(
+  board: Board,
+  numPlayers: number,
+  options?: { playerNames?: string[]; variant?: GameVariant },
+): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
     players[String(i)] = { resources: emptyResources() };
@@ -29,8 +33,11 @@ function initialState(board: Board, numPlayers: number): GameState {
     numPlayers,
     board,
     players,
+    playerNames: Array.from({ length: numPlayers }, (_, i) => options?.playerNames?.[i] || PLAYER_NAMES[i] || `Player ${i + 1}`),
+    variant: options?.variant ?? "base",
     buildings: {},
     roads: {},
+    knights: {},
     banditTile: desert ? desert.id : -1,
     setupStep: 0,
     pendingSetupSettlement: null,
@@ -41,18 +48,15 @@ function initialState(board: Board, numPlayers: number): GameState {
   };
 }
 
-/**
- * Build the boardgame.io game definition for a given generated board.
- * The board is fixed at creation time so every client shares the same map.
- */
 export function createHexIslesGame(
   board: Board,
   numPlayers: number,
+  options?: { playerNames?: string[]; variant?: GameVariant },
 ): Game<GameState> {
   return {
     name: "hex-isles",
 
-    setup: () => initialState(board, numPlayers),
+    setup: () => initialState(board, numPlayers, options),
 
     endIf: ({ G }) => {
       const w = winner(G);
@@ -83,6 +87,7 @@ export function createHexIslesGame(
           buildRoad,
           buildSettlement,
           buildCity,
+          buildKnight,
           bankTrade,
           endTurn,
         },

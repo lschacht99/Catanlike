@@ -20,13 +20,12 @@ export default function StudioPage() {
   const [playerNames, setPlayerNames] = useState<string[]>(["Leah", "Moshe", "Amber", "Green"]);
 
   useEffect(() => {
-    const builtins = allThemes();
-    setThemes(builtins);
+    setThemes(allThemes());
   }, []);
 
   useEffect(() => {
     setPlayerNames((names) => Array.from({ length: numPlayers }, (_, i) => names[i] || PLAYER_NAMES[i] || `Player ${i + 1}`));
-    setPlayerModes((modes) => Array.from({ length: numPlayers }, (_, i) => modes[i] || (numPlayers === 4 && i > 1 ? "bot" : "human")));
+    setPlayerModes((modes) => Array.from({ length: numPlayers }, (_, i) => modes[i] || (numPlayers === 4 && i > 0 ? "bot" : "human")));
   }, [numPlayers]);
 
   const theme = useMemo(() => themes.find((t) => t.id === themeId) ?? themes[0], [themeId, themes]);
@@ -39,13 +38,7 @@ export default function StudioPage() {
     setPlayerModes((modes) => modes.map((mode, i) => (i === index ? value : mode)));
   }
 
-  function startGame(custom?: {
-    themeId?: string;
-    names?: string[];
-    modes?: PlayerMode[];
-    variant?: GameVariant;
-    numPlayers?: number;
-  }) {
+  function startGame(custom?: { themeId?: string; names?: string[]; modes?: PlayerMode[]; variant?: GameVariant; numPlayers?: number }) {
     const finalNumPlayers = custom?.numPlayers ?? numPlayers;
     const names = Array.from({ length: finalNumPlayers }, (_, i) => custom?.names?.[i] || playerNames[i] || PLAYER_NAMES[i] || `Player ${i + 1}`);
     const modes = Array.from({ length: finalNumPlayers }, (_, i) => custom?.modes?.[i] || playerModes[i] || "human");
@@ -60,6 +53,12 @@ export default function StudioPage() {
     router.push("/game");
   }
 
+  function pickSolo() {
+    setNumPlayers(4);
+    setPlayerModes(["human", "bot", "bot", "bot"]);
+    setPlayerNames(["You", "Red CPU", "Blue CPU", "Green CPU"]);
+  }
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 py-6">
       <header className="mb-4 flex items-center gap-3">
@@ -71,6 +70,10 @@ export default function StudioPage() {
       </header>
 
       <section className="mb-4 grid grid-cols-2 gap-2">
+        <button onClick={pickSolo} className="rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-3 text-left">
+          <span className="block text-sm font-bold text-yellow-300">Solo vs 3 CPU</span>
+          <span className="block text-[11px] text-white/55">One real player, full board</span>
+        </button>
         <button onClick={() => { setNumPlayers(4); setPlayerModes(["human", "human", "bot", "bot"]); }} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-left">
           <span className="block text-sm font-bold">2 humans + 2 CPU</span>
           <span className="block text-[11px] text-white/55">Best local quick mode</span>
@@ -83,7 +86,7 @@ export default function StudioPage() {
           <span className="block text-sm font-bold">2 players</span>
           <span className="block text-[11px] text-white/55">Fast duel map</span>
         </button>
-        <button onClick={() => startGame({ themeId: "hamsa", names: ["Leah", "Moshe", "Scout", "Guide"], modes: ["human", "human", "bot", "bot"], numPlayers: 4, variant: "cities-knights" })} className="rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-3 text-left">
+        <button onClick={() => startGame({ themeId: "hamsa", names: ["Leah", "Moshe", "Scout", "Guide"], modes: ["human", "human", "bot", "bot"], numPlayers: 4, variant: "cities-knights" })} className="col-span-2 rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-3 text-left">
           <span className="block text-sm font-bold text-yellow-300">Leah & Moshe Journey</span>
           <span className="block text-[11px] text-white/55">Cute Hamsa preset for you two</span>
         </button>
@@ -135,7 +138,7 @@ export default function StudioPage() {
 
       <section className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
         <p className="font-semibold text-white">Want a map inspired by a photo?</p>
-        <p className="mt-1 text-xs text-white/55">Use the new Image Forge to upload a Japan, Jerusalem, or any travel photo and spin a matching board palette from it.</p>
+        <p className="mt-1 text-xs text-white/55">Use Image Forge to upload a Japan, Jerusalem, or travel photo and spin a matching board palette from it.</p>
         <Link href="/image-forge" className="mt-3 inline-block rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold">Open Image Forge</Link>
       </section>
 

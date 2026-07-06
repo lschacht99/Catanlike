@@ -23,7 +23,7 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
-import HexBoard from "./HexBoard";
+import HexBoardPlay from "./HexBoardPlay";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel from "./TradePanel";
@@ -200,23 +200,16 @@ export default function GameBoardPlay({
             const active = id === current;
             const mode = playerModes[Number(id)] === "bot" ? "CPU" : "Human";
             return (
-              <div
-                key={id}
-                className={`min-w-[6rem] flex-1 rounded-xl border px-2 py-1.5 ${active ? "border-yellow-400 bg-white/15 shadow-[0_0_24px_rgba(250,204,21,0.2)]" : "border-white/10 bg-white/5"}`}
-              >
+              <div key={id} className={`min-w-[6rem] flex-1 rounded-xl border px-2 py-1.5 ${active ? "border-yellow-400 bg-white/15 shadow-[0_0_24px_rgba(250,204,21,0.2)]" : "border-white/10 bg-white/5"}`}>
                 <div className="flex items-center justify-between gap-1">
-                  <span className="truncate text-xs font-black" style={{ color: PLAYER_COLORS[Number(id)] }}>
-                    {names[Number(id)]}
-                  </span>
+                  <span className="truncate text-xs font-black" style={{ color: PLAYER_COLORS[Number(id)] }}>{names[Number(id)]}</span>
                   <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px] uppercase text-white/55">{mode}</span>
                 </div>
                 <span className="block text-[11px] text-white/70">⭐ {victoryPoints(G, id)} / {targetPoints}</span>
               </div>
             );
           })}
-          <Link href="/" className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/70">
-            Exit
-          </Link>
+          <Link href="/" className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/70">Exit</Link>
         </div>
         <div className="mt-1 flex items-center justify-between gap-2 px-1 text-[10px] uppercase tracking-[0.2em] text-white/35">
           <span>{theme.name}</span>
@@ -226,7 +219,7 @@ export default function GameBoardPlay({
 
       <div className="relative z-10 min-h-0 flex-1 p-2 sm:p-3">
         <div className="board-card relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20 shadow-2xl">
-          <HexBoard
+          <HexBoardPlay
             board={G.board}
             theme={theme}
             buildings={G.buildings}
@@ -248,9 +241,7 @@ export default function GameBoardPlay({
 
       <div className="relative z-10 shrink-0 rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-black" style={{ color: PLAYER_COLORS[Number(current)] }}>
-            {names[Number(current)]}&rsquo;s turn
-          </span>
+          <span className="text-sm font-black" style={{ color: PLAYER_COLORS[Number(current)] }}>{names[Number(current)]}&rsquo;s turn</span>
           {G.lastRoll && <span className="rounded-lg bg-white/10 px-2 py-0.5 text-sm font-bold text-white">🎲 {G.lastRoll[0]} + {G.lastRoll[1]} = {G.lastRoll[0] + G.lastRoll[1]}</span>}
         </div>
 
@@ -259,15 +250,7 @@ export default function GameBoardPlay({
         {!inSetup && (
           <>
             <div className="mt-2">
-              <BuildMenu
-                theme={theme}
-                resources={resources}
-                pieces={pieces}
-                placeable={placeable}
-                activeMode={buildMode}
-                onPick={(kind) => setBuildMode(kind)}
-                includeKnights={variant === "cities-knights"}
-              />
+              <BuildMenu theme={theme} resources={resources} pieces={pieces} placeable={placeable} activeMode={buildMode} onPick={(kind) => setBuildMode(kind)} includeKnights={variant === "cities-knights"} />
             </div>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               <button disabled={currentIsCpu || G.hasRolled || !!gameover} onClick={() => moves.rollDice()} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>

@@ -9,7 +9,77 @@ body {
   background: #020617;
 }
 
-/* Mobile-first pseudo-3D board renderer; designed to be replaceable by a Three.js/R3F scene. */
+body {
+  color: white;
+}
+
+.game-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(56, 189, 248, 0.18), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(250, 204, 21, 0.14), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.12), transparent 34%),
+    linear-gradient(180deg, #020617 0%, #08111f 48%, #020617 100%);
+}
+
+.game-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at center, black, transparent 76%);
+}
+
+.ambient-orb {
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 999px;
+  filter: blur(42px);
+  opacity: 0.34;
+  animation: driftOrb 9s ease-in-out infinite alternate;
+}
+
+.ambient-orb-a {
+  left: -5rem;
+  top: 8rem;
+  background: #38bdf8;
+}
+
+.ambient-orb-b {
+  right: -6rem;
+  bottom: 6rem;
+  background: #f59e0b;
+  animation-delay: -3s;
+}
+
+.board-card {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(14, 165, 233, 0.18), transparent 48%),
+    rgba(2, 6, 23, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
+.board-card svg {
+  filter: drop-shadow(0 20px 36px rgba(0, 0, 0, 0.34));
+}
+
+@keyframes driftOrb {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(1.2rem, -1rem, 0) scale(1.12); }
+}
+
+/* Legacy pseudo-3D renderer kept for the gallery/experiments, not the main playable board. */
 .scene3d { min-height: 58vh; display: grid; place-items: center; gap: 0.75rem; perspective: 900px; overflow: hidden; touch-action: none; }
 .board3d { position: relative; width: min(96vw, 680px); height: min(62vh, 520px); transform: rotateX(58deg) rotateZ(-18deg); transform-style: preserve-3d; }
 .sea3d { position: absolute; inset: 6%; border-radius: 46%; background: radial-gradient(circle at 35% 30%, #5ac8fa, #17658d 62%, #08334d); transform: translateZ(-18px); box-shadow: inset 0 0 42px #ffffff55, 0 20px 70px #061b2dcc; }

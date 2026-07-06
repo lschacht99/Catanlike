@@ -1,17 +1,20 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "") ?? "";
+const withBasePath = (path: string) => `${basePath}${path}`;
+
 export const metadata: Metadata = {
   title: "Hex Isles",
   description:
     "A mobile-first, themeable hex-board resource trading game. Pass-and-play with friends on one phone.",
-  manifest: "/manifest.webmanifest",
+  manifest: withBasePath("/manifest.webmanifest"),
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Hex Isles",
   },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: withBasePath("/icon.svg"), apple: withBasePath("/icon.svg") },
 };
 
 export const viewport: Viewport = {

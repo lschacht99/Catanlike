@@ -45,6 +45,25 @@ players and a theme, and pass the phone around.
 - Backend Gemini theme endpoint scaffold at `server/gemini/theme.ts`; API keys stay server-side and generated JSON is sanitized before use
 - Optional advanced rules module scaffold (`guardians-and-guilds`) for knights, activation, invasion track, city improvements, and progress-card style systems
 
+
+## Publish to GitHub Pages
+
+This repo is configured for GitHub Pages using Next.js static export and the official Pages GitHub Actions flow:
+
+1. Push to `main`.
+2. In the GitHub repo, open **Settings → Pages**.
+3. Set **Build and deployment → Source** to **GitHub Actions**.
+4. Wait for the **Deploy static site to GitHub Pages** workflow to finish.
+5. Open `https://<github-user>.github.io/<repo-name>/`.
+
+For this repository name, the manual local Pages build is:
+
+```bash
+npm run pages:build
+```
+
+The workflow sets `NEXT_PUBLIC_BASE_PATH` to `/${{ github.event.repository.name }}` so links, scripts, styles, manifest, and icons work from a GitHub Pages subpath.
+
 ## The one rule that matters: themes never touch rules
 
 The engine only ever sees canonical resource keys:

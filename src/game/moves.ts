@@ -36,15 +36,11 @@ function playerName(G: GameState, id: string): string {
   return G.playerNames[Number(id)] ?? PLAYER_NAMES[Number(id)] ?? `Player ${Number(id) + 1}`;
 }
 
-/** Give every building on tiles numbered `roll` its production. */
 function distribute(G: GameState, roll: number): void {
   const geo = getGeometry(G.board);
   const producing = new Map(
     G.board.tiles
-      .filter(
-        (t) =>
-          t.token === roll && t.id !== G.banditTile && t.resource !== "desert",
-      )
+      .filter((t) => t.token === roll && t.id !== G.banditTile && t.resource !== "desert")
       .map((t) => [t.id, t.resource as ResourceKey]),
   );
   if (producing.size === 0) return;
@@ -63,17 +59,13 @@ export const placeSettlement: Move<GameState> = ({ G, playerID }, vertexId: stri
   const player = playerID!;
   if (G.pendingSetupSettlement !== null) return INVALID_MOVE;
   if (!validSettlementSpots(G, player, true).includes(vertexId)) return INVALID_MOVE;
-
   G.buildings[vertexId] = { player, city: false };
   G.pendingSetupSettlement = vertexId;
-
   if (G.setupStep >= G.numPlayers) {
     const geo = getGeometry(G.board);
     for (const tileId of geo.vertices[vertexId].tiles) {
       const tile = G.board.tiles[tileId];
-      if (tile.resource !== "desert") {
-        G.players[player].resources[tile.resource] += 1;
-      }
+      if (tile.resource !== "desert") G.players[player].resources[tile.resource] += 1;
     }
   }
   log(G, `${playerName(G, player)} placed a settlement.`);
@@ -83,7 +75,6 @@ export const placeRoad: Move<GameState> = ({ G, events, playerID }, edgeId: stri
   const player = playerID!;
   if (G.pendingSetupSettlement === null) return INVALID_MOVE;
   if (!validRoadSpots(G, player, true).includes(edgeId)) return INVALID_MOVE;
-
   G.roads[edgeId] = player;
   G.pendingSetupSettlement = null;
   G.setupStep += 1;
@@ -98,11 +89,8 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
   G.hasRolled = true;
   G.lastRoll = dice;
   log(G, `${playerName(G, playerID!)} rolled ${sum}.`);
-  if (sum === 7) {
-    G.mustMoveBandit = true;
-  } else {
-    distribute(G, sum);
-  }
+  if (sum === 7) G.mustMoveBandit = true;
+  else distribute(G, sum);
 };
 
 export const moveBandit: Move<GameState> = (
@@ -113,19 +101,14 @@ export const moveBandit: Move<GameState> = (
   const player = playerID!;
   if (!G.mustMoveBandit) return INVALID_MOVE;
   if (!validBanditTiles(G).includes(tileId)) return INVALID_MOVE;
-
   G.banditTile = tileId;
   G.mustMoveBandit = false;
-
   const victims = banditVictims(G, tileId, player);
   if (victims.length === 0) {
     log(G, `${playerName(G, player)} moved the bandit.`);
     return;
   }
-  const victim =
-    victimId !== undefined && victims.includes(victimId)
-      ? victimId
-      : victims[Math.floor(random.Number() * victims.length)];
+  const victim = victimId !== undefined && victims.includes(victimId) ? victimId : victims[Math.floor(random.Number() * victims.length)];
   const hand = G.players[victim].resources;
   const pool: ResourceKey[] = RESOURCES.flatMap((r) => Array(hand[r]).fill(r));
   const stolen = pool[Math.floor(random.Number() * pool.length)];
@@ -179,11 +162,7 @@ export const buildKnight: Move<GameState> = ({ G, playerID }, vertexId: string) 
   log(G, `${playerName(G, player)} trained a knight.`);
 };
 
-export const bankTrade: Move<GameState> = (
-  { G, playerID },
-  give: ResourceKey,
-  receive: ResourceKey,
-) => {
+export const bankTrade: Move<GameState> = ({ G, playerID }, give: ResourceKey, receive: ResourceKey) => {
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   const hand = G.players[player].resources;
@@ -191,6 +170,30 @@ export const bankTrade: Move<GameState> = (
   hand[give] -= BANK_TRADE_RATE;
   hand[receive] += 1;
   log(G, `${playerName(G, player)} traded ${BANK_TRADE_RATE} ${give} for 1 ${receive}.`);
+};
+
+export const playerTrade: Move<GameState> = (
+  { G, playerID },
+  targetPlayer: string,
+  give: ResourceKey,
+  giveAmount: number,
+  receive: ResourceKey,
+  receiveAmount: number,
+) => {
+  const player = playerID!;
+  if (!requireRolled(G)) return INVALID_MOVE;
+  if (!G.players[targetPlayer] || targetPlayer === player) return INVALID_MOVE;
+  if (give === receive) return INVALID_MOVE;
+  if (giveAmount < 1 || receiveAmount < 1 || giveAmount > 9 || receiveAmount > 9) return INVALID_MOVE;
+  const currentHand = G.players[player].resources;
+  const targetHand = G.players[targetPlayer].resources;
+  if (currentHand[give] < giveAmount) return INVALID_MOVE;
+  if (targetHand[receive] < receiveAmount) return INVALID_MOVE;
+  currentHand[give] -= giveAmount;
+  targetHand[give] += giveAmount;
+  targetHand[receive] -= receiveAmount;
+  currentHand[receive] += receiveAmount;
+  log(G, `${playerName(G, player)} traded with ${playerName(G, targetPlayer)}.`);
 };
 
 export const endTurn: Move<GameState> = ({ G, events, playerID }) => {

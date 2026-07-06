@@ -18,7 +18,7 @@ export interface Theme {
   desert: ResourceTheme;
   bandit: { label: string; icon: string };
   /** Display names for the build pieces. Rules never read these. */
-  terms: { road: string; settlement: string; city: string };
+  terms: { road: string; settlement: string; city: string; knight: string };
   /** Board chrome colors. */
   board: { sea: string };
   /** True for user-created themes stored in localStorage. */

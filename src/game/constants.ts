@@ -20,19 +20,21 @@ export const TOKEN_PIPS: Record<number, number> = {
   2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1,
 };
 
-export type BuildableKind = "road" | "settlement" | "city";
+export type BuildableKind = "road" | "settlement" | "city" | "knight";
 
 export const BUILD_COSTS: Record<BuildableKind, Partial<ResourceCounts>> = {
   road: { wood: 1, brick: 1 },
   settlement: { wood: 1, brick: 1, grain: 1, wool: 1 },
   city: { grain: 2, ore: 3 },
+  knight: { grain: 1, wool: 1, ore: 1 },
 };
 
 /** Per-player piece limits. */
-export const PIECE_LIMITS = { road: 15, settlement: 5, city: 4 };
+export const PIECE_LIMITS = { road: 15, settlement: 5, city: 4, knight: 6 };
 
 export const BANK_TRADE_RATE = 4;
 export const VICTORY_POINTS_TO_WIN = 10;
+export const CITIES_KNIGHTS_POINTS_TO_WIN = 12;
 
 export const PLAYER_COLORS = ["#ef4444", "#3b82f6", "#f59e0b", "#10b981"];
 export const PLAYER_NAMES = ["Red", "Blue", "Amber", "Green"];

@@ -70,10 +70,14 @@ export interface GameState {
   numPlayers: number;
   board: Board;
   players: Record<string, PlayerState>;
+  playerNames: string[];
+  variant: GameVariant;
   /** vertexId -> building */
   buildings: Record<string, Building>;
   /** edgeId -> player id */
   roads: Record<string, string>;
+  /** vertexId -> player id for Cities & Knights lite */
+  knights: Record<string, string>;
   /** Tile id the bandit currently occupies. */
   banditTile: number;
   /** Setup phase bookkeeping. */
@@ -94,5 +98,6 @@ export interface GameConfig {
   themeId: string;
   board: Board;
   playerModes?: PlayerMode[];
+  playerNames?: string[];
   variant?: GameVariant;
 }

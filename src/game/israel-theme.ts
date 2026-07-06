@@ -42,6 +42,6 @@ export const ISRAEL_THEME: Theme = {
     tilePrompt: "soft desert dunes hex tile",
   },
   bandit: { label: "Wanderer", icon: "🦂" },
-  terms: { road: "Trail", settlement: "Moshav", city: "Citadel" },
+  terms: { road: "Trail", settlement: "Moshav", city: "Citadel", knight: "Guard" },
   board: { sea: "#0b5f82" },
 };

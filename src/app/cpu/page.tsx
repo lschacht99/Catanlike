@@ -1,3 +1,4 @@
 export default function CpuPage() {
-  return <main>CPU setup</main>;
+  const playerModes = ["human", "human", "bot", "bot"];
+  return <main>{playerModes.join(",")}</main>;
 }

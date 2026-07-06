@@ -21,8 +21,10 @@ export default function GamePage() {
   const HexIslesClient = useMemo(() => {
     if (!config) return null;
     const theme = getTheme(config.themeId);
+    const playerModes = config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human" as const);
+    const variant = config.variant ?? "base";
     const Board = (props: BoardProps<GameState>) => (
-      <GameBoard {...props} theme={theme} />
+      <GameBoard {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
       game: createHexIslesGame(config.board, config.numPlayers),

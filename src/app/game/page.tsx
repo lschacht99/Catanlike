@@ -8,7 +8,7 @@ import type { GameConfig, GameState } from "@/types/game";
 import { createHexIslesGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import { loadGameConfig } from "@/lib/storage";
-import GameBoard from "@/components/GameBoard";
+import GameBoardPlay from "@/components/GameBoardPlay";
 
 export default function GamePage() {
   const [config, setConfig] = useState<GameConfig | null | undefined>(undefined);
@@ -23,7 +23,7 @@ export default function GamePage() {
     const playerModes = config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human" as const);
     const variant = config.variant ?? "base";
     const Board = (props: BoardProps<GameState>) => (
-      <GameBoard {...props} theme={theme} playerModes={playerModes} variant={variant} />
+      <GameBoardPlay {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
       game: createHexIslesGame(config.board, config.numPlayers, {

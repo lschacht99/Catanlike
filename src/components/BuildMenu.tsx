@@ -12,11 +12,12 @@ import { canAfford } from "@/game/rules";
 interface BuildMenuProps {
   theme: Theme;
   resources: ResourceCounts;
-  pieces: { roads: number; settlements: number; cities: number };
+  pieces: { roads: number; settlements: number; cities: number; knights: number };
   /** Kinds that currently have at least one legal placement. */
   placeable: Record<BuildableKind, boolean>;
   activeMode: BuildableKind | null;
   onPick: (kind: BuildableKind | null) => void;
+  includeKnights?: boolean;
 }
 
 function CostChips({ kind, theme }: { kind: BuildableKind; theme: Theme }) {
@@ -41,14 +42,16 @@ export default function BuildMenu({
   placeable,
   activeMode,
   onPick,
+  includeKnights = false,
 }: BuildMenuProps) {
   const items: { kind: BuildableKind; label: string; used: number; max: number }[] = [
     { kind: "road", label: theme.terms.road, used: pieces.roads, max: PIECE_LIMITS.road },
     { kind: "settlement", label: theme.terms.settlement, used: pieces.settlements, max: PIECE_LIMITS.settlement },
     { kind: "city", label: theme.terms.city, used: pieces.cities, max: PIECE_LIMITS.city },
+    ...(includeKnights ? [{ kind: "knight" as const, label: theme.terms.knight, used: pieces.knights, max: PIECE_LIMITS.knight }] : []),
   ];
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div className={`grid gap-1.5 ${includeKnights ? "grid-cols-2" : "grid-cols-3"}`}>
       {items.map(({ kind, label, used, max }) => {
         const affordable = canAfford(resources, kind);
         const enabled = affordable && placeable[kind];

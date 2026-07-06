@@ -1,4 +1,5 @@
 import type { Theme } from "@/types/theme";
+import { ISRAEL_THEME } from "./israel-theme";
 
 /**
  * Built-in themes. The engine only ever sees canonical keys
@@ -72,7 +73,7 @@ export const JAPAN_THEME: Theme = {
   board: { sea: "#264653" },
 };
 
-export const BUILTIN_THEMES: Theme[] = [CLASSIC_THEME, JAPAN_THEME];
+export const BUILTIN_THEMES: Theme[] = [CLASSIC_THEME, JAPAN_THEME, ISRAEL_THEME];
 
 const CUSTOM_THEMES_KEY = "hexisles:themes";
 

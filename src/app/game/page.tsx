@@ -11,7 +11,6 @@ import { loadGameConfig } from "@/lib/storage";
 import GameBoard from "@/components/GameBoard";
 
 export default function GamePage() {
-  // undefined = still loading from localStorage, null = no game configured.
   const [config, setConfig] = useState<GameConfig | null | undefined>(undefined);
 
   useEffect(() => {
@@ -27,7 +26,10 @@ export default function GamePage() {
       <GameBoard {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
-      game: createHexIslesGame(config.board, config.numPlayers),
+      game: createHexIslesGame(config.board, config.numPlayers, {
+        playerNames: config.playerNames,
+        variant,
+      }),
       board: Board,
       numPlayers: config.numPlayers,
       debug: false,
@@ -48,7 +50,7 @@ export default function GamePage() {
         <p className="text-4xl">⬡</p>
         <p className="text-white/70">No game is set up yet.</p>
         <Link
-          href="/new"
+          href="/studio"
           className="rounded-2xl bg-yellow-500 px-6 py-3 font-bold text-slate-900"
         >
           Create a game

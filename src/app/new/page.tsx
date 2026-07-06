@@ -6,20 +6,21 @@ import { useRouter } from "next/navigation";
 import type { Board } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { generateBoard } from "@/game/generator";
+import { createDuelBoard } from "@/game/board-generator/presets";
 import { allThemes, getTheme } from "@/game/themes";
 import { saveGameConfig } from "@/lib/storage";
 import HexBoard from "@/components/HexBoard";
 
 export default function NewGamePage() {
   const router = useRouter();
-  const [numPlayers, setNumPlayers] = useState(4);
+  const [numPlayers, setNumPlayers] = useState(2);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [board, setBoard] = useState<Board | null>(null);
 
   useEffect(() => {
     setThemes(allThemes());
-    setBoard(generateBoard());
+    setBoard(createDuelBoard());
   }, []);
 
   const theme = getThemeFrom(themes, themeId);
@@ -40,10 +41,10 @@ export default function NewGamePage() {
       <section className="mb-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">Players</p>
         <div className="grid grid-cols-2 gap-2">
-          {[3, 4].map((n) => (
+          {[2, 3, 4].map((n) => (
             <button
               key={n}
-              onClick={() => setNumPlayers(n)}
+              onClick={() => { setNumPlayers(n); setBoard(n === 2 ? createDuelBoard() : generateBoard()); }}
               className={`rounded-xl border py-3 font-bold ${
                 numPlayers === n
                   ? "border-yellow-400 bg-yellow-400/20 text-yellow-300"
@@ -92,7 +93,7 @@ export default function NewGamePage() {
           )}
         </div>
         <button
-          onClick={() => setBoard(generateBoard())}
+          onClick={() => setBoard(numPlayers === 2 ? createDuelBoard() : generateBoard())}
           className="mt-2 w-full rounded-xl bg-white/10 py-2.5 text-sm font-semibold"
         >
           🔀 Regenerate board

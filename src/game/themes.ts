@@ -1,10 +1,8 @@
 import type { Theme } from "@/types/theme";
+import { HAMSA_THEME } from "./hamsa-theme";
 import { ISRAEL_THEME } from "./israel-theme";
+import { JEWISH_THEME } from "./jewish-theme";
 
-/**
- * Built-in themes. The engine only ever sees canonical keys
- * (wood/brick/grain/wool/ore); themes are a pure presentation layer.
- */
 export const CLASSIC_THEME: Theme = {
   id: "classic",
   name: "Classic Isles",
@@ -35,7 +33,7 @@ export const CLASSIC_THEME: Theme = {
     tilePrompt: "dry sandy badlands hex tile, board game style",
   },
   bandit: { label: "Bandit", icon: "🗿" },
-  terms: { road: "Road", settlement: "Village", city: "City" },
+  terms: { road: "Road", settlement: "Village", city: "City", knight: "Knight" },
   board: { sea: "#1e6091" },
 };
 
@@ -69,11 +67,17 @@ export const JAPAN_THEME: Theme = {
     tilePrompt: "minimal Japanese zen garden hex tile",
   },
   bandit: { label: "Ronin", icon: "👺" },
-  terms: { road: "Path", settlement: "Village", city: "Castle" },
+  terms: { road: "Path", settlement: "Village", city: "Castle", knight: "Samurai" },
   board: { sea: "#264653" },
 };
 
-export const BUILTIN_THEMES: Theme[] = [CLASSIC_THEME, JAPAN_THEME, ISRAEL_THEME];
+export const BUILTIN_THEMES: Theme[] = [
+  CLASSIC_THEME,
+  JAPAN_THEME,
+  ISRAEL_THEME,
+  JEWISH_THEME,
+  HAMSA_THEME,
+];
 
 const CUSTOM_THEMES_KEY = "hexisles:themes";
 

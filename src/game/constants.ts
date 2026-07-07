@@ -1,4 +1,13 @@
-import type { ResourceCounts, ResourceKey, TileResource } from "@/types/game";
+import type {
+  CommodityCounts,
+  CommodityKey,
+  ProgressCardType,
+  ProgressTrackCounts,
+  ProgressTrackKey,
+  ResourceCounts,
+  ResourceKey,
+  TileResource,
+} from "@/types/game";
 
 /** Standard tile mix for the 19-hex board. */
 export const TILE_COUNTS: Record<TileResource, number> = {
@@ -34,13 +43,48 @@ export const PIECE_LIMITS = { road: 15, settlement: 5, city: 4, knight: 6 };
 
 export const BANK_TRADE_RATE = 4;
 export const VICTORY_POINTS_TO_WIN = 10;
-export const CITIES_KNIGHTS_POINTS_TO_WIN = 12;
+export const CITIES_KNIGHTS_POINTS_TO_WIN = 13;
+export const BARBARIAN_TRACK_LENGTH = 7;
 
 export const PLAYER_COLORS = ["#ef4444", "#3b82f6", "#f59e0b", "#10b981"];
 export const PLAYER_NAMES = ["Red", "Blue", "Amber", "Green"];
 
+export const COMMODITY_FROM_RESOURCE: Partial<Record<ResourceKey, CommodityKey>> = {
+  ore: "coin",
+  wool: "cloth",
+  wood: "book",
+};
+
+export const TRACK_COMMODITY: Record<ProgressTrackKey, CommodityKey> = {
+  trade: "cloth",
+  politics: "coin",
+  science: "book",
+};
+
+export const PROGRESS_CARD_LABELS: Record<ProgressCardType, string> = {
+  roadworks: "Roadworks",
+  harvest: "Harvest",
+  oreRush: "Ore Rush",
+  merchant: "Merchant",
+  diplomat: "Diplomat",
+  invention: "Invention",
+};
+
+export const PROGRESS_DECK: ProgressCardType[] = [
+  "roadworks", "roadworks", "harvest", "harvest", "oreRush", "oreRush",
+  "merchant", "merchant", "diplomat", "diplomat", "invention", "invention",
+];
+
 export function emptyResources(): ResourceCounts {
   return { wood: 0, brick: 0, grain: 0, wool: 0, ore: 0 };
+}
+
+export function emptyCommodities(): CommodityCounts {
+  return { coin: 0, cloth: 0, book: 0 };
+}
+
+export function emptyImprovements(): ProgressTrackCounts {
+  return { trade: 0, politics: 0, science: 0 };
 }
 
 export function totalResources(r: ResourceCounts): number {
@@ -50,3 +94,6 @@ export function totalResources(r: ResourceCounts): number {
 export const RESOURCE_KEYS_ORDERED: ResourceKey[] = [
   "wood", "brick", "grain", "wool", "ore",
 ];
+
+export const COMMODITY_KEYS_ORDERED: CommodityKey[] = ["coin", "cloth", "book"];
+export const TRACK_KEYS_ORDERED: ProgressTrackKey[] = ["trade", "politics", "science"];

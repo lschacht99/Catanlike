@@ -91,6 +91,11 @@ export interface PlayerState {
   resources: ResourceCounts;
   devCards: DevCard[];
   knightsPlayed: number;
+  /** Cities & Knights extras (patched in lazily for legacy saves). */
+  commodities?: CommodityCounts;
+  improvements?: ProgressTrackCounts;
+  progressCards?: ProgressCardType[];
+  victoryBonus?: number;
 }
 
 export type PlayerMode = "human" | "bot";
@@ -103,6 +108,10 @@ export interface GameState {
   players: Record<string, PlayerState>;
   /** Display names, index = player id. */
   names: string[];
+  /** Alias of names kept for newer UI components. */
+  playerNames?: string[];
+  /** Rules variant this match was created with. */
+  variant?: GameVariant;
   /** vertexId -> building */
   buildings: Record<string, Building>;
   /** edgeId -> player id */
@@ -146,6 +155,8 @@ export interface GameConfig {
   themeId: string;
   board: Board;
   playerNames?: string[];
+  playerModes?: PlayerMode[];
+  variant?: GameVariant;
 }
 
 /** setupData passed through the lobby when creating an online match. */

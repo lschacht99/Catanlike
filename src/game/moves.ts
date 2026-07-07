@@ -11,10 +11,12 @@ import type {
 } from "@/types/game";
 import {
   BANK_TRADE_RATE,
-  BARBARIAN_TRACK_LENGTH,
   BUILD_COSTS,
   DEV_CARD_COST,
+  emptyCommodities,
+  emptyImprovements,
   PIECE_LIMITS,
+  PROGRESS_DECK,
   totalResources,
 } from "./constants";
 import {
@@ -140,9 +142,6 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
   } else {
     distribute(G, sum);
   }
-
-  if (sum === 7) G.mustMoveBandit = true;
-  else distribute(G, sum);
 };
 
 export const moveBandit: Move<GameState> = (
@@ -375,6 +374,36 @@ export const playMonopoly: Move<GameState> = (
   }
   G.players[player].resources[resource] += taken;
   log(G, `${name(G, player)} played Monopoly and took ${taken} ${resource}.`);
+};
+
+/** Direct trade between the current player and a chosen rival. */
+export const playerTrade: Move<GameState> = (
+  { G, playerID },
+  targetPlayer: string,
+  give: ResourceKey,
+  giveAmount: number,
+  receive: ResourceKey,
+  receiveAmount: number,
+) => {
+  ensureCkState(G);
+  const player = playerID!;
+  if (!requireRolled(G)) return INVALID_MOVE;
+  if (targetPlayer === player || !G.players[targetPlayer]) return INVALID_MOVE;
+  if (!RESOURCES.includes(give) || !RESOURCES.includes(receive)) return INVALID_MOVE;
+  if (give === receive) return INVALID_MOVE;
+  if (!Number.isInteger(giveAmount) || !Number.isInteger(receiveAmount)) return INVALID_MOVE;
+  if (giveAmount < 1 || receiveAmount < 1) return INVALID_MOVE;
+  const mine = G.players[player].resources;
+  const theirs = G.players[targetPlayer].resources;
+  if (mine[give] < giveAmount || theirs[receive] < receiveAmount) return INVALID_MOVE;
+  mine[give] -= giveAmount;
+  theirs[give] += giveAmount;
+  theirs[receive] -= receiveAmount;
+  mine[receive] += receiveAmount;
+  log(
+    G,
+    `${name(G, player)} traded ${giveAmount} ${give} to ${name(G, targetPlayer)} for ${receiveAmount} ${receive}.`,
+  );
 };
 
 export const endTurn: Move<GameState> = ({ G, events, playerID }) => {

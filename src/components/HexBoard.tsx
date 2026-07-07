@@ -157,6 +157,9 @@ export default function HexBoard({
             const cy = corners.reduce((s, p) => s + p.y, 0) / 6;
             const style =
               tile.resource === "desert" ? theme.desert : theme.resources[tile.resource];
+            const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+            const artHref =
+              style.image ?? (style.tileArt ? `${basePath}${style.tileArt}` : undefined);
             const hot = tile.token === 6 || tile.token === 8;
             const targetable = highlightTileSet.has(tile.id);
             const sidePoints = corners
@@ -171,13 +174,13 @@ export default function HexBoard({
                 {/* Extruded side: the same hex dropped down, darkened. */}
                 <polygon points={sidePoints} fill={shade(style.color, 0.55)} />
                 <polygon points={points} fill={style.color} />
-                {style.image ? (
+                {artHref ? (
                   <>
                     <clipPath id={`${uid}t${tile.id}`}>
                       <polygon points={points} />
                     </clipPath>
                     <image
-                      href={style.image}
+                      href={artHref}
                       x={cx - 8.7}
                       y={cy - 10}
                       width={17.4}

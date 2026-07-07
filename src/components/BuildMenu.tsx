@@ -1,6 +1,6 @@
 "use client";
 
-import type { GameState, ResourceKey } from "@/types/game";
+import type { GameState, ResourceCounts, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import {
   BUILD_COSTS,
@@ -11,15 +11,30 @@ import {
 import { canAfford, canBuyDevCard, pieceCounts } from "@/game/rules";
 import Sheet from "./Sheet";
 
-interface BuildSheetProps {
-  G: GameState;
-  player: string;
+interface Pieces {
+  roads: number;
+  settlements: number;
+  cities: number;
+  knights?: number;
+}
+
+/**
+ * Build controls, usable two ways:
+ * - Sheet mode (online board): pass `G` + `player` + `onBuyDevCard` + `onClose`.
+ * - Inline mode (GameBoardPlay): pass `resources` + `pieces` (+ `activeMode`).
+ */
+interface BuildMenuProps {
   theme: Theme;
-  /** Kinds that currently have at least one legal placement. */
   placeable: Record<BuildableKind, boolean>;
   onPick: (kind: BuildableKind) => void;
-  onBuyDevCard: () => void;
-  onClose: () => void;
+  G?: GameState;
+  player?: string;
+  onBuyDevCard?: () => void;
+  onClose?: () => void;
+  resources?: ResourceCounts;
+  pieces?: Pieces;
+  activeMode?: BuildableKind | null;
+  includeKnights?: boolean;
 }
 
 function Costs({ cost, theme }: { cost: Partial<Record<ResourceKey, number>>; theme: Theme }) {
@@ -35,7 +50,7 @@ function Costs({ cost, theme }: { cost: Partial<Record<ResourceKey, number>>; th
   );
 }
 
-function Row({
+function SheetRow({
   icon,
   label,
   sub,
@@ -71,54 +86,111 @@ function Row({
   );
 }
 
-export default function BuildSheet({
-  G,
-  player,
+export default function BuildMenu({
   theme,
   placeable,
   onPick,
+  G,
+  player,
   onBuyDevCard,
   onClose,
-}: BuildSheetProps) {
-  const resources = G.players[player].resources;
-  const pieces = pieceCounts(G, player);
-  const freeRoad = G.freeRoads > 0;
+  resources: resourcesProp,
+  pieces: piecesProp,
+  activeMode = null,
+  includeKnights = false,
+}: BuildMenuProps) {
+  const resources =
+    resourcesProp ?? (G && player ? G.players[player].resources : undefined);
+  const pieces = piecesProp ?? (G && player ? pieceCounts(G, player) : undefined);
+  if (!resources || !pieces) return null;
 
+  const freeRoads = G?.freeRoads ?? 0;
+  const knightTerm = theme.terms.knight ?? "Knight";
+
+  const items: {
+    kind: BuildableKind;
+    icon: string;
+    label: string;
+    used: number;
+    max: number;
+  }[] = [
+    { kind: "road", icon: "🛤️", label: theme.terms.road, used: pieces.roads, max: PIECE_LIMITS.road },
+    { kind: "settlement", icon: "🏠", label: theme.terms.settlement, used: pieces.settlements, max: PIECE_LIMITS.settlement },
+    { kind: "city", icon: "🏛️", label: theme.terms.city, used: pieces.cities, max: PIECE_LIMITS.city },
+  ];
+  if (includeKnights) {
+    items.push({
+      kind: "knight",
+      icon: "🛡️",
+      label: knightTerm,
+      used: pieces.knights ?? 0,
+      max: PIECE_LIMITS.knight,
+    });
+  }
+
+  function enabled(kind: BuildableKind): boolean {
+    const freeRoad = kind === "road" && freeRoads > 0;
+    return (freeRoad || canAfford(resources!, kind)) && placeable[kind];
+  }
+
+  // ---- Inline mode: compact grid used inside GameBoardPlay's drawer ----
+  if (!onClose) {
+    return (
+      <div className={`grid gap-1.5 ${items.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+        {items.map(({ kind, label, used, max }) => {
+          const active = activeMode === kind;
+          return (
+            <button
+              key={kind}
+              disabled={!enabled(kind) && !active}
+              onClick={() => onPick(kind)}
+              className={`flex min-h-[64px] flex-col items-center justify-center rounded-xl border px-1 py-2 text-sm font-semibold transition disabled:opacity-35 ${
+                active
+                  ? "border-yellow-400 bg-yellow-400/20 text-yellow-300"
+                  : "border-white/15 bg-white/5 text-white"
+              }`}
+            >
+              <span>{label}</span>
+              <Costs cost={BUILD_COSTS[kind]} theme={theme} />
+              <span className="text-[10px] opacity-60">{max - used} left</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ---- Sheet mode: full-width rows (online board) ----
   return (
     <Sheet title="Build" onClose={onClose}>
       <div className="space-y-2.5">
-        <Row
-          icon="🛤️"
-          label={theme.terms.road}
-          sub={`${PIECE_LIMITS.road - pieces.roads} left${freeRoad ? ` · ${G.freeRoads} FREE` : ""}`}
-          costs={freeRoad ? <span className="text-xs font-bold text-olive">Free (Road Building)</span> : <Costs cost={BUILD_COSTS.road} theme={theme} />}
-          disabled={(!freeRoad && !canAfford(resources, "road")) || !placeable.road}
-          onClick={() => onPick("road")}
-        />
-        <Row
-          icon="🏠"
-          label={theme.terms.settlement}
-          sub={`${PIECE_LIMITS.settlement - pieces.settlements} left`}
-          costs={<Costs cost={BUILD_COSTS.settlement} theme={theme} />}
-          disabled={!canAfford(resources, "settlement") || !placeable.settlement}
-          onClick={() => onPick("settlement")}
-        />
-        <Row
-          icon="🏛️"
-          label={theme.terms.city}
-          sub={`${PIECE_LIMITS.city - pieces.cities} left`}
-          costs={<Costs cost={BUILD_COSTS.city} theme={theme} />}
-          disabled={!canAfford(resources, "city") || !placeable.city}
-          onClick={() => onPick("city")}
-        />
-        <Row
-          icon="🃏"
-          label="Journey Card"
-          sub={`${G.devDeck.length} left in the deck`}
-          costs={<Costs cost={DEV_CARD_COST} theme={theme} />}
-          disabled={!canBuyDevCard(G, player)}
-          onClick={onBuyDevCard}
-        />
+        {items.map(({ kind, icon, label, used, max }) => (
+          <SheetRow
+            key={kind}
+            icon={icon}
+            label={label}
+            sub={`${max - used} left${kind === "road" && freeRoads > 0 ? ` · ${freeRoads} FREE` : ""}`}
+            costs={
+              kind === "road" && freeRoads > 0 ? (
+                <span className="text-xs font-bold text-olive">Free (Road Building)</span>
+              ) : (
+                <Costs cost={BUILD_COSTS[kind]} theme={theme} />
+              )
+            }
+            disabled={!enabled(kind)}
+            onClick={() => onPick(kind)}
+          />
+        ))}
+        {G && player && onBuyDevCard && (
+          <SheetRow
+            icon="🃏"
+            label="Journey Card"
+            sub={`${G.devDeck.length} left in the deck`}
+            costs={<Costs cost={DEV_CARD_COST} theme={theme} />}
+            disabled={!canBuyDevCard(G, player)}
+            onClick={onBuyDevCard}
+          />
+        )}
       </div>
     </Sheet>
   );

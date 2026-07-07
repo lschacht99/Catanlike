@@ -26,7 +26,7 @@ export default function GamePage() {
       <GameBoardPlay {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
-      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames),
+      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant),
       board: Board,
       numPlayers: config.numPlayers,
       debug: false,

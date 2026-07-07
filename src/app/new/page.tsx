@@ -6,6 +6,7 @@ import type { Board } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
+import { createDuelBoard } from "@/game/board-generator/presets";
 import { allThemes } from "@/game/themes";
 import { saveGameConfig } from "@/lib/storage";
 import HexBoard from "@/components/HexBoard";
@@ -23,7 +24,7 @@ const DEFAULT_NAMES = ["Player 1", "Player 2", "Player 3", "Player 4"];
 
 export default function NewGamePage() {
   const router = useRouter();
-  const [numPlayers, setNumPlayers] = useState(2);
+  const [numPlayers, setNumPlayers] = useState(3);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
@@ -31,8 +32,14 @@ export default function NewGamePage() {
 
   useEffect(() => {
     setThemes(allThemes());
-    setBoard(createDuelBoard());
+    setBoard(generateBoard());
   }, []);
+
+  function pickPlayers(n: number) {
+    setNumPlayers(n);
+    // Two nomads duel on the compact 7-hex board; more get the classic 19.
+    setBoard(n === 2 ? createDuelBoard() : generateBoard());
+  }
 
   const theme = themes.find((t) => t.id === themeId) ?? themes[0];
 
@@ -53,9 +60,9 @@ export default function NewGamePage() {
 
       <Card className="mb-4">
         <SectionLabel>Players</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          {[3, 4].map((n) => (
-            <Chip key={n} selected={numPlayers === n} onClick={() => setNumPlayers(n)}>
+        <div className="grid grid-cols-3 gap-2">
+          {[2, 3, 4].map((n) => (
+            <Chip key={n} selected={numPlayers === n} onClick={() => pickPlayers(n)}>
               {n} players
             </Chip>
           ))}
@@ -100,7 +107,7 @@ export default function NewGamePage() {
 
       <Card className="mb-5">
         <div className="mb-2 flex items-center justify-between">
-          <SectionLabel>Board · Classic 19 hexes</SectionLabel>
+          <SectionLabel>Board · {numPlayers === 2 ? "Duel 7 hexes" : "Classic 19 hexes"}</SectionLabel>
           {board && (
             <span className="text-xs font-semibold text-ink-soft">
               balance {board.score}
@@ -116,7 +123,7 @@ export default function NewGamePage() {
             </div>
           )}
         </div>
-        <SecondaryButton onClick={() => setBoard(generateBoard())} className="mt-3">
+        <SecondaryButton onClick={() => setBoard(numPlayers === 2 ? createDuelBoard() : generateBoard())} className="mt-3">
           Regenerate
         </SecondaryButton>
       </Card>

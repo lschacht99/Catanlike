@@ -1,15 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { clearSeat, getMatch, loadSeat, lobbyClient, GAME_NAME, type MatchInfo } from "@/lib/online";
 import { Card, PrimaryButton, SectionLabel, Shell, TopBar } from "@/components/ui";
 import { PLAYER_COLORS } from "@/game/constants";
 
-export default function WaitingRoomPage() {
+function WaitingRoomPage() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const matchID = params.id;
+  const matchID = useSearchParams().get("m") ?? "";
   const [match, setMatch] = useState<MatchInfo | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +33,7 @@ export default function WaitingRoomPage() {
   const full = seats.length > 0 && joined.length === seats.length;
 
   useEffect(() => {
-    if (full) router.push(`/online/play/${matchID}`);
+    if (full) router.push(`/online/play?m=${matchID}`);
   }, [full, matchID, router]);
 
   async function leave() {
@@ -109,12 +108,20 @@ export default function WaitingRoomPage() {
         </p>
       )}
 
-      <PrimaryButton disabled={!full} onClick={() => router.push(`/online/play/${matchID}`)}>
+      <PrimaryButton disabled={!full} onClick={() => router.push(`/online/play?m=${matchID}`)}>
         {full ? "Start Game" : "Waiting for players…"}
       </PrimaryButton>
       <button onClick={leave} className="mt-3 w-full text-center text-sm text-ink-soft underline">
         Leave room
       </button>
     </Shell>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<main className="flex min-h-dvh items-center justify-center text-ink-soft">Loading…</main>}>
+      <WaitingRoomPage />
+    </Suspense>
   );
 }

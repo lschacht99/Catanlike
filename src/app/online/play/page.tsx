@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Client } from "boardgame.io/react";
 import { SocketIO } from "boardgame.io/multiplayer";
 import type { BoardProps } from "boardgame.io/react";
@@ -12,9 +12,8 @@ import { loadSeat, serverUrl, type MatchSeat } from "@/lib/online";
 import GameBoard from "@/components/GameBoard";
 import { PrimaryLink, Shell } from "@/components/ui";
 
-export default function OnlinePlayPage() {
-  const params = useParams<{ id: string }>();
-  const matchID = params.id;
+function OnlinePlayPage() {
+  const matchID = useSearchParams().get("m") ?? "";
   const [seat, setSeat] = useState<MatchSeat | null | undefined>(undefined);
 
   useEffect(() => {
@@ -61,5 +60,13 @@ export default function OnlinePlayPage() {
       playerID={seat.playerID}
       credentials={seat.credentials}
     />
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<main className="flex min-h-dvh items-center justify-center text-ink-soft">Loading…</main>}>
+      <OnlinePlayPage />
+    </Suspense>
   );
 }

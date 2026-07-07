@@ -1,6 +1,6 @@
 import type { Game } from "boardgame.io";
-import type { Board, GameState, OnlineSetupData } from "@/types/game";
-import { devDeck, emptyResources, PLAYER_NAMES } from "./constants";
+import type { Board, GameState, GameVariant, OnlineSetupData } from "@/types/game";
+import { devDeck, emptyResources, PLAYER_NAMES, PROGRESS_DECK } from "./constants";
 import { generateBoard } from "./generator";
 import { winner } from "./scoring";
 import {
@@ -16,8 +16,10 @@ import {
   moveBandit,
   placeRoad,
   placeSettlement,
+  playerTrade,
   playKnight,
   playMonopoly,
+  playProgressCard,
   playRoadBuilding,
   playYearOfPlenty,
   rollDice,
@@ -32,6 +34,7 @@ export function initialState(
   numPlayers: number,
   shuffledDeck: GameState["devDeck"],
   names?: string[],
+  variant: GameVariant = "base",
 ): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
@@ -42,14 +45,17 @@ export function initialState(
     };
   }
   const desert = board.tiles.find((t) => t.resource === "desert");
+  const resolvedNames =
+    names && names.length === numPlayers
+      ? names
+      : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]);
   return {
     numPlayers,
     board,
     players,
-    names:
-      names && names.length === numPlayers
-        ? names
-        : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]),
+    names: resolvedNames,
+    playerNames: resolvedNames,
+    variant,
     buildings: {},
     roads: {},
     knights: {},
@@ -104,6 +110,11 @@ const PHASES: Game<GameState>["phases"] = {
       playRoadBuilding,
       playYearOfPlenty,
       playMonopoly,
+      playerTrade,
+      buildKnight,
+      activateKnight,
+      improveCity,
+      playProgressCard,
       endTurn,
     },
     turn: {
@@ -137,11 +148,12 @@ export function createHexIslesGame(
   board: Board,
   numPlayers: number,
   names?: string[],
+  variant: GameVariant = "base",
 ): Game<GameState> {
   return {
     name: "hamsa-nomads",
     setup: ({ random }) =>
-      initialState(board, numPlayers, random.Shuffle(devDeck()), names),
+      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant),
     endIf: END_IF,
     phases: PHASES,
   };

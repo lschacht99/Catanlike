@@ -82,7 +82,7 @@ export default function GameBoardPlay({
   const gameover = ctx.gameover as { winner: string } | undefined;
   const currentIsCpu = playerModes[Number(current)] === "bot";
   const boardMoves = moves as ExtendedMoves;
-  const names = G.playerNames;
+  const names = G.playerNames ?? G.names ?? [];
   const player = G.players[current];
   const commodities = player.commodities ?? { coin: 0, cloth: 0, book: 0 };
   const improvements = player.improvements ?? { trade: 0, politics: 0, science: 0 };

@@ -45,8 +45,11 @@ export default function TradePanel({
   const [receiveAmount, setReceiveAmount] = useState(1);
 
   const rivals = Object.keys(players).filter((id) => id !== currentPlayer);
+  const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
   const targetHand = targetPlayer ? players[targetPlayer]?.resources : undefined;
-  const canBankConfirm = give !== null && receive !== null && give !== receive && resources[give] >= BANK_TRADE_RATE;
+
+  const canBankConfirm =
+    give !== null && receive !== null && give !== receive && resources[give] >= BANK_TRADE_RATE;
   const canPlayerConfirm =
     !!onPlayerTrade &&
     !!targetPlayer &&
@@ -58,6 +61,11 @@ export default function TradePanel({
     receiveAmount > 0 &&
     resources[give] >= giveAmount &&
     targetHand[receive] >= receiveAmount;
+
+  function rivalName(id: string): string {
+    const base = playerNames[Number(id)] ?? `Player ${Number(id) + 1}`;
+    return playerModes[Number(id)] === "bot" ? `${base} 🤖` : base;
+  }
 
   function Row({
     title,
@@ -100,40 +108,169 @@ export default function TradePanel({
     );
   }
 
-  return (
-    <Sheet title="Trade · Market Gate" onClose={onClose}>
-      <div className="space-y-4">
-        <Row
-          title={`You give ${BANK_TRADE_RATE}`}
-          selected={give}
-          onSelect={setGive}
-          disabledFor={(r) => resources[r] < BANK_TRADE_RATE}
-        />
-        <div className="flex justify-center text-ink-soft">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4v9m0 0-2.5-2.5M6 13l2.5-2.5M14 16V7m0 0 2.5 2.5M14 7l-2.5 2.5" />
-          </svg>
-        </div>
-        <Row
-          title="You get 1"
-          selected={receive}
-          onSelect={setReceive}
-          disabledFor={(r) => r === give}
-        />
+  function Stepper({
+    value,
+    onChange,
+    max,
+    label,
+  }: {
+    value: number;
+    onChange: (v: number) => void;
+    max: number;
+    label: string;
+  }) {
+    return (
+      <div className="flex items-center gap-2">
         <button
-          disabled={!canConfirm}
-          onClick={() => {
-            if (give && receive) onTrade(give, receive);
-            onClose();
-          }}
-          className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"
+          onClick={() => onChange(Math.max(1, value - 1))}
+          aria-label={`Decrease ${label}`}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-cream text-lg font-bold text-ink"
         >
-          Propose Trade
+          −
         </button>
-        <p className="text-center text-[10px] text-ink-faint">
-          Player-to-player trades arrive in a future caravan.
-        </p>
+        <span className="w-8 text-center text-lg font-bold text-ink">{value}</span>
+        <button
+          onClick={() => onChange(Math.min(Math.max(1, max), value + 1))}
+          aria-label={`Increase ${label}`}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-cream text-lg font-bold text-ink"
+        >
+          +
+        </button>
       </div>
+    );
+  }
+
+  return (
+    <Sheet title="Trade" onClose={onClose}>
+      {showPlayerTab && (
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-full border border-line bg-cream p-1">
+          {(
+            [
+              { id: "bank", label: "Market Gate" },
+              { id: "player", label: "With Players" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setMode(t.id)}
+              className={`rounded-full py-2 text-xs font-bold uppercase tracking-[0.15em] ${
+                mode === t.id ? "bg-ink text-cream" : "text-ink-soft"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mode === "bank" ? (
+        <div className="space-y-4">
+          <Row
+            title={`You give ${BANK_TRADE_RATE}`}
+            selected={give}
+            onSelect={setGive}
+            disabledFor={(r) => resources[r] < BANK_TRADE_RATE}
+          />
+          <div className="flex justify-center text-ink-soft">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 4v9m0 0-2.5-2.5M6 13l2.5-2.5M14 16V7m0 0 2.5 2.5M14 7l-2.5 2.5" />
+            </svg>
+          </div>
+          <Row
+            title="You get 1"
+            selected={receive}
+            onSelect={setReceive}
+            disabledFor={(r) => r === give}
+          />
+          <button
+            disabled={!canBankConfirm}
+            onClick={() => {
+              if (give && receive) onTrade(give, receive);
+            }}
+            className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"
+          >
+            Trade {BANK_TRADE_RATE} : 1
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-soft">
+              Trade with
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {rivals.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setTargetPlayer(id)}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+                    targetPlayer === id
+                      ? "border-ink bg-ink text-cream"
+                      : "border-line bg-cream text-ink"
+                  }`}
+                >
+                  {rivalName(id)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Row
+            title="You give"
+            selected={give}
+            onSelect={(r) => {
+              setGive(r);
+              setGiveAmount(1);
+            }}
+            disabledFor={(r) => resources[r] < 1}
+          />
+          {give && (
+            <div className="flex items-center justify-between rounded-2xl border border-line bg-cream px-3 py-2">
+              <span className="text-xs font-semibold text-ink-soft">
+                Amount ({resources[give]} in hand)
+              </span>
+              <Stepper
+                value={giveAmount}
+                onChange={setGiveAmount}
+                max={resources[give]}
+                label="give amount"
+              />
+            </div>
+          )}
+          <Row
+            title="You receive"
+            selected={receive}
+            onSelect={(r) => {
+              setReceive(r);
+              setReceiveAmount(1);
+            }}
+            disabledFor={(r) => r === give}
+          />
+          {receive && targetHand && (
+            <div className="flex items-center justify-between rounded-2xl border border-line bg-cream px-3 py-2">
+              <span className="text-xs font-semibold text-ink-soft">
+                Amount (they hold {targetHand[receive]})
+              </span>
+              <Stepper
+                value={receiveAmount}
+                onChange={setReceiveAmount}
+                max={targetHand[receive]}
+                label="receive amount"
+              />
+            </div>
+          )}
+          <button
+            disabled={!canPlayerConfirm}
+            onClick={() => {
+              if (targetPlayer && give && receive && onPlayerTrade) {
+                onPlayerTrade(targetPlayer, give, giveAmount, receive, receiveAmount);
+              }
+            }}
+            className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"
+          >
+            Propose Trade
+          </button>
+        </div>
+      )}
     </Sheet>
   );
 }

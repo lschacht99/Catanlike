@@ -2,20 +2,20 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hex Isles",
+  title: "Hamsa Nomads",
   description:
-    "A mobile-first, themeable hex-board resource trading game. Pass-and-play with friends on one phone.",
+    "Build · Trade · Explore — a mobile-first, themeable hex-board trading game. Pass-and-play or online with friends.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Hex Isles",
+    statusBarStyle: "default",
+    title: "Hamsa Nomads",
   },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#f2ead9",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -28,9 +28,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="bg-slate-950 font-sans text-white antialiased">
-        {children}
-      </body>
+      <body className="bg-sand font-sans text-ink antialiased">{children}</body>
     </html>
   );
 }

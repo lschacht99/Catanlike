@@ -6,6 +6,19 @@ export type ResourceKey = (typeof RESOURCE_KEYS)[number];
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
 
+export type DevCardType =
+  | "knight"
+  | "victory"
+  | "roadBuilding"
+  | "yearOfPlenty"
+  | "monopoly";
+
+export interface DevCard {
+  type: DevCardType;
+  /** ctx.turn when bought — a card cannot be played the turn it was bought. */
+  turnBought: number;
+}
+
 export interface Tile {
   id: number;
   /** Axial hex coordinates (pointy-top). */
@@ -60,6 +73,8 @@ export interface Building {
 
 export interface PlayerState {
   resources: ResourceCounts;
+  devCards: DevCard[];
+  knightsPlayed: number;
 }
 
 /** The boardgame.io `G` object. */
@@ -67,12 +82,19 @@ export interface GameState {
   numPlayers: number;
   board: Board;
   players: Record<string, PlayerState>;
+  /** Display names, index = player id. */
+  names: string[];
   /** vertexId -> building */
   buildings: Record<string, Building>;
   /** edgeId -> player id */
   roads: Record<string, string>;
   /** Tile id the bandit currently occupies. */
   banditTile: number;
+  /** Shuffled development card deck (draw from the end). */
+  devDeck: DevCardType[];
+  /** Bonus holders (2 VP each). */
+  largestArmyHolder: string | null;
+  longestRoadHolder: string | null;
   /** Setup phase bookkeeping. */
   setupStep: number;
   /** Vertex placed this setup turn; the setup road must touch it. */
@@ -80,14 +102,27 @@ export interface GameState {
   /** Play phase bookkeeping. */
   hasRolled: boolean;
   lastRoll: [number, number] | null;
+  /** Resources gained by each player on the last roll (for the roll-result sheet). */
+  lastGains: Record<string, Partial<ResourceCounts>>;
   mustMoveBandit: boolean;
+  /** Free roads remaining from a Road Building card. */
+  freeRoads: number;
+  /** Only one development card may be played per turn. */
+  playedDevCardThisTurn: boolean;
   /** Human-readable event feed (most recent last). */
   log: string[];
 }
 
-/** Saved in localStorage to configure the next game. */
+/** Saved in localStorage to configure the next local game. */
 export interface GameConfig {
   numPlayers: number;
   themeId: string;
   board: Board;
+  playerNames?: string[];
+}
+
+/** setupData passed through the lobby when creating an online match. */
+export interface OnlineSetupData {
+  board: Board;
+  themeId: string;
 }

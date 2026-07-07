@@ -35,7 +35,7 @@ export const CLASSIC_THEME: Theme = {
   },
   bandit: { label: "Bandit", icon: "🗿" },
   terms: { road: "Road", settlement: "Village", city: "City" },
-  board: { sea: "#1e6091" },
+  board: { sea: "#e9decb" },
 };
 
 export const JAPAN_THEME: Theme = {
@@ -69,7 +69,7 @@ export const JAPAN_THEME: Theme = {
   },
   bandit: { label: "Ronin", icon: "👺" },
   terms: { road: "Path", settlement: "Village", city: "Castle" },
-  board: { sea: "#264653" },
+  board: { sea: "#e5dccb" },
 };
 
 export const BUILTIN_THEMES: Theme[] = [CLASSIC_THEME, JAPAN_THEME];

@@ -154,8 +154,8 @@ export default function HexBoard({
                 <polygon
                   points={points}
                   fill={style.color}
-                  stroke={targetable ? "#facc15" : "#0f172a"}
-                  strokeWidth={targetable ? 0.9 : 0.5}
+                  stroke={targetable ? "#b45a37" : "#faf5e9"}
+                  strokeWidth={targetable ? 1 : 0.7}
                   className={targetable ? "animate-pulse" : undefined}
                 />
                 <text
@@ -169,18 +169,18 @@ export default function HexBoard({
                 </text>
                 {tile.token !== null && (
                   <g className="pointer-events-none">
-                    <circle cx={cx} cy={cy + 1.8} r="3.4" fill="#f5f0e6" stroke="#44403c" strokeWidth="0.3" />
+                    <circle cx={cx} cy={cy + 1.8} r="3.4" fill="#faf5e9" stroke="#b9a77f" strokeWidth="0.3" />
                     <text
                       x={cx}
                       y={cy + 3.2}
                       textAnchor="middle"
                       fontSize="3.8"
                       fontWeight="700"
-                      fill={hot ? "#dc2626" : "#1c1917"}
+                      fill={hot ? "#b0341f" : "#1e3a5f"}
                     >
                       {tile.token}
                     </text>
-                    <g fill={hot ? "#dc2626" : "#1c1917"}>
+                    <g fill={hot ? "#b0341f" : "#1e3a5f"}>
                       {Array.from({ length: TOKEN_PIPS[tile.token] ?? 0 }).map((_, i, arr) => (
                         <circle
                           key={i}
@@ -246,7 +246,7 @@ export default function HexBoard({
                     y1={a.y + (b.y - a.y) * 0.2}
                     x2={a.x + (b.x - a.x) * 0.8}
                     y2={a.y + (b.y - a.y) * 0.8}
-                    stroke="#facc15"
+                    stroke="#b45a37"
                     strokeWidth="1.6"
                     strokeDasharray="1.5 1"
                     strokeLinecap="round"
@@ -270,8 +270,8 @@ export default function HexBoard({
                 key={vertexId}
                 points={shape}
                 fill={color}
-                stroke={clickable ? "#facc15" : "#0f172a"}
-                strokeWidth={clickable ? 0.7 : 0.4}
+                stroke={clickable ? "#b45a37" : "#faf5e9"}
+                strokeWidth={clickable ? 0.7 : 0.45}
                 onClick={tap(clickable ? () => onVertexTap(vertexId) : undefined)}
                 className={clickable ? "cursor-pointer animate-pulse" : undefined}
               />
@@ -290,8 +290,8 @@ export default function HexBoard({
                     <circle cx={v.x} cy={v.y} r="3.4" fill="transparent" />
                     <circle
                       cx={v.x} cy={v.y} r="1.8"
-                      fill="rgba(250,204,21,0.55)"
-                      stroke="#facc15"
+                      fill="rgba(180,90,55,0.45)"
+                      stroke="#b45a37"
                       strokeWidth="0.5"
                       className="animate-pulse pointer-events-none"
                     />
@@ -305,21 +305,21 @@ export default function HexBoard({
       <div className="absolute bottom-2 right-2 flex flex-col gap-1">
         <button
           aria-label="Zoom in"
-          className="h-9 w-9 rounded-lg bg-black/50 text-lg font-bold text-white backdrop-blur"
+          className="h-9 w-9 rounded-full border border-line bg-cream/90 text-lg font-bold text-ink shadow-card backdrop-blur"
           onClick={() => setView((v) => ({ ...v, scale: clampScale(v.scale * 1.3) }))}
         >
           +
         </button>
         <button
           aria-label="Zoom out"
-          className="h-9 w-9 rounded-lg bg-black/50 text-lg font-bold text-white backdrop-blur"
+          className="h-9 w-9 rounded-full border border-line bg-cream/90 text-lg font-bold text-ink shadow-card backdrop-blur"
           onClick={() => setView((v) => ({ ...v, scale: clampScale(v.scale / 1.3) }))}
         >
           −
         </button>
         <button
           aria-label="Reset view"
-          className="h-9 w-9 rounded-lg bg-black/50 text-xs font-bold text-white backdrop-blur"
+          className="h-9 w-9 rounded-full border border-line bg-cream/90 text-xs font-bold text-ink shadow-card backdrop-blur"
           onClick={() => setView({ scale: 1, tx: 0, ty: 0 })}
         >
           ⟳

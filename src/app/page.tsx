@@ -1,43 +1,69 @@
 import Link from "next/link";
-
-const menu = [
-  { href: "/new", title: "Play", subtitle: "Start a pass-and-play game", icon: "🎲" },
-  { href: "/forge", title: "Map Forge", subtitle: "Generate & save balanced boards", icon: "🗺️" },
-  { href: "/themes", title: "Themes", subtitle: "Reskin every resource & tile", icon: "🎨" },
-  { href: "/boards", title: "Saved Boards", subtitle: "Replay your favorite maps", icon: "💾" },
-];
+import {
+  BottomNav,
+  HamsaLogo,
+  PrimaryLink,
+  SecondaryLink,
+  Shell,
+} from "@/components/ui";
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-10">
-      <div className="mb-10 text-center">
-        <p className="text-6xl">⬡</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight">Hex Isles</h1>
-        <p className="mt-2 text-sm text-white/60">
-          Settle, trade, and build across themeable hex islands.
-        </p>
-      </div>
-
-      <nav className="space-y-3">
-        {menu.map((item) => (
+    <>
+      <Shell withNav className="justify-center">
+        <div className="flex items-center justify-between">
           <Link
-            key={item.href}
-            href={item.href}
-            className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 transition active:scale-[0.98] active:bg-white/10"
+            href="/profile"
+            aria-label="Settings"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-cream text-ink shadow-card"
           >
-            <span className="text-3xl">{item.icon}</span>
-            <span>
-              <span className="block text-lg font-bold">{item.title}</span>
-              <span className="block text-xs text-white/60">{item.subtitle}</span>
-            </span>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="10" cy="10" r="2.6" />
+              <path d="M10 2.5v2m0 11v2M2.5 10h2m11 0h2M4.8 4.8l1.4 1.4m7.6 7.6 1.4 1.4m0-10.4-1.4 1.4M6.2 13.8l-1.4 1.4" strokeLinecap="round" />
+            </svg>
           </Link>
-        ))}
-      </nav>
+          <HamsaLogo size={34} />
+        </div>
 
-      <p className="mt-10 text-center text-[11px] leading-relaxed text-white/35">
-        An original game inspired by classic hex resource-trading mechanics.
-        Not affiliated with or endorsed by any commercial board game.
-      </p>
-    </main>
+        <div className="mt-6 text-center">
+          <HamsaLogo size={72} className="mx-auto" />
+          <h1 className="mt-4 font-display text-[44px] font-bold leading-none tracking-wide text-ink">
+            HAMSA
+          </h1>
+          <p className="mt-1 text-lg font-semibold uppercase tracking-[0.5em] text-rust">
+            Nomads
+          </p>
+          <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.35em] text-ink-soft">
+            Build · Trade · Explore
+          </p>
+        </div>
+
+        <div className="mx-auto my-7 h-px w-24 bg-rust/40" />
+
+        <div className="text-center">
+          <h2 className="font-display text-2xl text-ink">
+            A journey <span className="italic text-rust">you build</span>
+          </h2>
+          <p className="mx-auto mt-2 max-w-[260px] text-sm leading-relaxed text-ink-soft">
+            Settle new lands, trade resources, and build your nomadic legacy.
+          </p>
+        </div>
+
+        <div className="mt-8 space-y-3">
+          <PrimaryLink href="/new">Play</PrimaryLink>
+          <div className="grid grid-cols-2 gap-3">
+            <SecondaryLink href="/online/create">Create Game</SecondaryLink>
+            <SecondaryLink href="/online/join">Join Game</SecondaryLink>
+          </div>
+          <SecondaryLink href="/how-to-play">How to Play</SecondaryLink>
+        </div>
+
+        <p className="mt-8 text-center text-[10px] leading-relaxed text-ink-faint">
+          An original game inspired by classic hex resource-trading mechanics.
+          Not affiliated with any commercial board game.
+        </p>
+      </Shell>
+      <BottomNav active="/" />
+    </>
   );
 }

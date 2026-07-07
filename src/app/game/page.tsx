@@ -25,7 +25,7 @@ export default function GamePage() {
       <GameBoard {...props} theme={theme} />
     );
     return Client<GameState>({
-      game: createHexIslesGame(config.board, config.numPlayers),
+      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames),
       board: Board,
       numPlayers: config.numPlayers,
       debug: false,
@@ -34,7 +34,7 @@ export default function GamePage() {
 
   if (config === undefined) {
     return (
-      <main className="flex min-h-dvh items-center justify-center text-white/50">
+      <main className="flex min-h-dvh items-center justify-center text-ink-soft">
         Loading…
       </main>
     );
@@ -43,13 +43,13 @@ export default function GamePage() {
   if (config === null || !HexIslesClient) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-4xl">⬡</p>
-        <p className="text-white/70">No game is set up yet.</p>
+        <p className="text-4xl">🪬</p>
+        <p className="text-ink-soft">No journey is set up yet.</p>
         <Link
           href="/new"
-          className="rounded-2xl bg-yellow-500 px-6 py-3 font-bold text-slate-900"
+          className="rounded-full bg-ink px-8 py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream shadow-card"
         >
-          Create a game
+          Start a journey
         </Link>
       </main>
     );

@@ -1,12 +1,12 @@
 {
-  "name": "Hex Isles",
-  "short_name": "Hex Isles",
-  "description": "A mobile-first, themeable hex-board resource trading game.",
+  "name": "Hamsa Nomads",
+  "short_name": "Hamsa",
+  "description": "Build · Trade · Explore — a themeable hex-board trading game.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#020617",
-  "theme_color": "#0f172a",
+  "background_color": "#f2ead9",
+  "theme_color": "#f2ead9",
   "icons": [
     {
       "src": "/icon.svg",

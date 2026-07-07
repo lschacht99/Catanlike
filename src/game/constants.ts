@@ -1,4 +1,9 @@
-import type { ResourceCounts, ResourceKey, TileResource } from "@/types/game";
+import type {
+  DevCardType,
+  ResourceCounts,
+  ResourceKey,
+  TileResource,
+} from "@/types/game";
 
 /** Standard tile mix for the 19-hex board. */
 export const TILE_COUNTS: Record<TileResource, number> = {
@@ -34,8 +39,32 @@ export const PIECE_LIMITS = { road: 15, settlement: 5, city: 4 };
 export const BANK_TRADE_RATE = 4;
 export const VICTORY_POINTS_TO_WIN = 10;
 
-export const PLAYER_COLORS = ["#ef4444", "#3b82f6", "#f59e0b", "#10b981"];
-export const PLAYER_NAMES = ["Red", "Blue", "Amber", "Green"];
+/** Development cards. */
+export const DEV_CARD_COST: Partial<ResourceCounts> = { grain: 1, wool: 1, ore: 1 };
+
+export const DEV_DECK_COMPOSITION: Record<DevCardType, number> = {
+  knight: 14,
+  victory: 5,
+  roadBuilding: 2,
+  yearOfPlenty: 2,
+  monopoly: 2,
+};
+
+export function devDeck(): DevCardType[] {
+  const deck: DevCardType[] = [];
+  for (const [type, count] of Object.entries(DEV_DECK_COMPOSITION)) {
+    for (let i = 0; i < count; i++) deck.push(type as DevCardType);
+  }
+  return deck;
+}
+
+/** Bonus thresholds — 2 VP each. */
+export const LARGEST_ARMY_MIN = 3;
+export const LONGEST_ROAD_MIN = 5;
+export const BONUS_POINTS = 2;
+
+export const PLAYER_COLORS = ["#1e3a5f", "#b45a37", "#6b7f3e", "#c9a227"];
+export const PLAYER_NAMES = ["Navy", "Rust", "Olive", "Gold"];
 
 export function emptyResources(): ResourceCounts {
   return { wood: 0, brick: 0, grain: 0, wool: 0, ore: 0 };

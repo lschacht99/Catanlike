@@ -11,11 +11,15 @@ import type {
 } from "@/types/game";
 import {
   BANK_TRADE_RATE,
-  BARBARIAN_TRACK_LENGTH,
   BUILD_COSTS,
   DEV_CARD_COST,
+  emptyCommodities,
+  emptyImprovements,
   PIECE_LIMITS,
+  PROGRESS_CARD_LABELS,
+  PROGRESS_DECK,
   totalResources,
+  TRACK_COMMODITY,
 } from "./constants";
 import {
   banditVictims,
@@ -140,9 +144,6 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
   } else {
     distribute(G, sum);
   }
-
-  if (sum === 7) G.mustMoveBandit = true;
-  else distribute(G, sum);
 };
 
 export const moveBandit: Move<GameState> = (
@@ -196,7 +197,6 @@ export const buildSettlement: Move<GameState> = ({ G, playerID }, vertexId: stri
   if (!validSettlementSpots(G, player, false).includes(vertexId)) return INVALID_MOVE;
   pay(G.players[player].resources, BUILD_COSTS.settlement);
   G.buildings[vertexId] = { player, city: false };
-  // A new settlement can cut an opponent's longest road.
   updateLongestRoad(G);
   log(G, `${name(G, player)} built a settlement.`);
 };
@@ -222,7 +222,7 @@ export const buildKnight: Move<GameState> = ({ G, playerID }, vertexId: string) 
   pay(G.players[player].resources, BUILD_COSTS.knight);
   G.knights[vertexId] = player;
   G.activeKnights[vertexId] = false;
-  log(G, `${playerName(G, player)} trained an inactive knight.`);
+  log(G, `${name(G, player)} trained an inactive knight.`);
 };
 
 export const activateKnight: Move<GameState> = ({ G, playerID }, vertexId?: string) => {
@@ -235,7 +235,7 @@ export const activateKnight: Move<GameState> = ({ G, playerID }, vertexId?: stri
   if (G.players[player].resources.grain < 1) return INVALID_MOVE;
   G.players[player].resources.grain -= 1;
   G.activeKnights[id] = true;
-  log(G, `${playerName(G, player)} activated a knight.`);
+  log(G, `${name(G, player)} activated a knight.`);
 };
 
 export const improveCity: Move<GameState> = ({ G, playerID }, track: ProgressTrackKey) => {
@@ -251,7 +251,7 @@ export const improveCity: Move<GameState> = ({ G, playerID }, track: ProgressTra
   const cost = current + 1;
   if (!payCommodity(G, player, commodity, cost)) return INVALID_MOVE;
   G.players[player].improvements[track] += 1;
-  log(G, `${playerName(G, player)} improved ${track} to level ${current + 1}.`);
+  log(G, `${name(G, player)} improved ${track} to level ${current + 1}.`);
 };
 
 export const playProgressCard: Move<GameState> = ({ G, playerID }, card: ProgressCardType) => {
@@ -283,7 +283,7 @@ export const playProgressCard: Move<GameState> = ({ G, playerID }, card: Progres
     G.players[player].resources.grain += 1;
     G.players[player].commodities.book += 1;
   }
-  log(G, `${playerName(G, player)} played ${PROGRESS_CARD_LABELS[card]}.`);
+  log(G, `${name(G, player)} played ${PROGRESS_CARD_LABELS[card]}.`);
 };
 
 export const bankTrade: Move<GameState> = ({ G, playerID }, give: ResourceKey, receive: ResourceKey) => {

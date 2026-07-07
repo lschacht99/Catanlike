@@ -206,6 +206,7 @@ export default function GameBoard({
             onVertexTap={onVertexTap}
             onEdgeTap={onEdgeTap}
             onTileTap={onTileTap}
+            tilt
             className="h-full w-full"
           />
         </div>

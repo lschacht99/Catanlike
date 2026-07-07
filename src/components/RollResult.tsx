@@ -5,22 +5,77 @@ import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 
 const PIPS: Record<number, [number, number][]> = {
-  1: [[8, 8]],
-  2: [[4.5, 4.5], [11.5, 11.5]],
-  3: [[4.5, 4.5], [8, 8], [11.5, 11.5]],
-  4: [[4.5, 4.5], [11.5, 4.5], [4.5, 11.5], [11.5, 11.5]],
-  5: [[4.5, 4.5], [11.5, 4.5], [8, 8], [4.5, 11.5], [11.5, 11.5]],
-  6: [[4.5, 4], [11.5, 4], [4.5, 8], [11.5, 8], [4.5, 12], [11.5, 12]],
+  1: [[50, 50]],
+  2: [[28, 28], [72, 72]],
+  3: [[28, 28], [50, 50], [72, 72]],
+  4: [[28, 28], [72, 28], [28, 72], [72, 72]],
+  5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]],
+  6: [[28, 25], [72, 25], [28, 50], [72, 50], [28, 75], [72, 75]],
 };
 
-function Die({ value }: { value: number }) {
+const SIZE = 52;
+const HALF = SIZE / 2;
+
+/** Where each pip-face sits on the cube. */
+const FACE_PLACEMENT: Record<number, string> = {
+  1: `translateZ(${HALF}px)`,
+  6: `rotateY(180deg) translateZ(${HALF}px)`,
+  2: `rotateX(90deg) translateZ(${HALF}px)`,
+  5: `rotateX(-90deg) translateZ(${HALF}px)`,
+  3: `rotateY(90deg) translateZ(${HALF}px)`,
+  4: `rotateY(-90deg) translateZ(${HALF}px)`,
+};
+
+/** Cube rotation that brings face `value` to the front. */
+const SHOW_FACE: Record<number, string> = {
+  1: "rotateX(0deg) rotateY(0deg)",
+  6: "rotateY(180deg)",
+  2: "rotateX(-90deg)",
+  5: "rotateX(90deg)",
+  3: "rotateY(-90deg)",
+  4: "rotateY(90deg)",
+};
+
+function Face({ value }: { value: number }) {
   return (
-    <svg width="44" height="44" viewBox="0 0 16 16">
-      <rect x="0.8" y="0.8" width="14.4" height="14.4" rx="3" fill="#faf5e9" stroke="#1e3a5f" strokeWidth="1" />
-      {PIPS[value]?.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="1.25" fill="#1e3a5f" />
+    <div
+      className="absolute inset-0 rounded-lg border border-ink/30 bg-cream"
+      style={{ transform: FACE_PLACEMENT[value], backfaceVisibility: "hidden" }}
+    >
+      {PIPS[value].map(([x, y], i) => (
+        <span
+          key={i}
+          className="absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink"
+          style={{ left: `${x}%`, top: `${y}%` }}
+        />
       ))}
-    </svg>
+    </div>
+  );
+}
+
+/** A CSS-3D die that tumbles in and settles on `value`. */
+export function Die3D({ value, delay = 0 }: { value: number; delay?: number }) {
+  return (
+    <div style={{ perspective: 600 }} aria-label={`Die showing ${value}`}>
+      <div
+        className="dice-tumble"
+        style={{ width: SIZE, height: SIZE, animationDelay: `${delay}ms` }}
+      >
+        <div
+          className="relative"
+          style={{
+            width: SIZE,
+            height: SIZE,
+            transformStyle: "preserve-3d",
+            transform: SHOW_FACE[value],
+          }}
+        >
+          {[1, 2, 3, 4, 5, 6].map((v) => (
+            <Face key={v} value={v} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -46,11 +101,11 @@ export default function RollResult({ G, theme, displayName, onContinue }: RollRe
         <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink-soft">
           Roll Result
         </p>
-        <div className="mt-3 flex items-center justify-center gap-3">
-          <Die value={a} />
-          <Die value={b} />
+        <div className="mt-4 flex items-center justify-center gap-5">
+          <Die3D value={a} />
+          <Die3D value={b} delay={120} />
         </div>
-        <p className="mt-2 font-display text-5xl font-bold text-rust">{sum}</p>
+        <p className="mt-3 font-display text-5xl font-bold text-rust">{sum}</p>
 
         <div className="mt-4 rounded-2xl border border-line bg-cream p-3 text-left">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.25em] text-ink-soft">

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import type { Board, Building } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS, TOKEN_PIPS } from "@/game/constants";
-import { buildGeometry, hexCorners } from "@/game/geometry";
+import { buildGeometry, hexCenter, hexCorners } from "@/game/geometry";
 
 interface HexBoardProps {
   board: Board;
@@ -19,7 +19,21 @@ interface HexBoardProps {
   onVertexTap?: (id: string) => void;
   onEdgeTap?: (id: string) => void;
   onTileTap?: (id: number) => void;
+  /** Gentle perspective tilt so the extruded tiles read as 3D. */
+  tilt?: boolean;
   className?: string;
+}
+
+/** How far the extruded tile sides drop below the top face (SVG units). */
+const TILE_DEPTH = 1.3;
+
+/** Darken a #rrggbb color for the extruded tile sides. */
+function shade(hex: string, factor: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return "rgba(0,0,0,0.35)";
+  const n = parseInt(hex.slice(1), 16);
+  const channel = (shift: number) =>
+    Math.max(0, Math.round(((n >> shift) & 255) * factor));
+  return `rgb(${channel(16)},${channel(8)},${channel(0)})`;
 }
 
 const EMPTY_BUILDINGS: Record<string, Building> = {};
@@ -37,6 +51,7 @@ export default function HexBoard({
   onVertexTap,
   onEdgeTap,
   onTileTap,
+  tilt = false,
   className = "",
 }: HexBoardProps) {
   const geometry = useMemo(() => buildGeometry(board.tiles), [board.tiles]);
@@ -125,7 +140,12 @@ export default function HexBoard({
         ref={svgRef}
         viewBox={`${minX - pad} ${minY - pad} ${vbW} ${vbH}`}
         className="h-full w-full touch-none select-none"
-        style={{ background: theme.board.sea }}
+        style={{
+          background: theme.board.sea,
+          ...(tilt
+            ? { transform: "perspective(750px) rotateX(12deg) scale(1.06)" }
+            : {}),
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -145,12 +165,17 @@ export default function HexBoard({
               tile.resource === "desert" ? theme.desert : theme.resources[tile.resource];
             const hot = tile.token === 6 || tile.token === 8;
             const targetable = highlightTileSet.has(tile.id);
+            const sidePoints = corners
+              .map((p) => `${p.x},${p.y + TILE_DEPTH}`)
+              .join(" ");
             return (
               <g
                 key={tile.id}
                 onClick={tap(onTileTap ? () => onTileTap(tile.id) : undefined)}
                 className={onTileTap && targetable ? "cursor-pointer" : undefined}
               >
+                {/* Extruded side: the same hex dropped down, darkened. */}
+                <polygon points={sidePoints} fill={shade(style.color, 0.55)} />
                 <polygon
                   points={points}
                   fill={style.color}
@@ -192,20 +217,33 @@ export default function HexBoard({
                     </g>
                   </g>
                 )}
-                {banditTile === tile.id && (
-                  <text
-                    x={cx}
-                    y={cy + 0.6}
-                    textAnchor="middle"
-                    fontSize="5.5"
-                    className="pointer-events-none"
-                  >
-                    {theme.bandit.icon}
-                  </text>
-                )}
               </g>
             );
           })}
+
+          {/* Bandit: a single element so it glides between tiles. */}
+          {banditTile !== null &&
+            (() => {
+              const tile = board.tiles.find((t) => t.id === banditTile);
+              if (!tile) return null;
+              const c = hexCenter(tile.q, tile.r);
+              return (
+                <g
+                  className="pointer-events-none"
+                  style={{
+                    transform: `translate(${c.x}px, ${c.y}px)`,
+                    transition: "transform 0.6s cubic-bezier(0.34, 1.3, 0.64, 1)",
+                  }}
+                >
+                  <g key={banditTile} className="bandit-hop">
+                    <ellipse cx="0" cy="2.6" rx="2.6" ry="0.8" fill="rgba(0,0,0,0.25)" />
+                    <text x="0" y="0.6" textAnchor="middle" fontSize="5.5">
+                      {theme.bandit.icon}
+                    </text>
+                  </g>
+                </g>
+              );
+            })()}
 
           {/* Roads */}
           {Object.entries(roads).map(([edgeId, player]) => {
@@ -223,7 +261,7 @@ export default function HexBoard({
                 stroke={PLAYER_COLORS[Number(player)]}
                 strokeWidth="1.8"
                 strokeLinecap="round"
-                className="pointer-events-none"
+                className="pointer-events-none piece-pop"
               />
             );
           })}
@@ -267,13 +305,13 @@ export default function HexBoard({
               : `${v.x - 1.8},${v.y + 1.6} ${v.x - 1.8},${v.y - 0.6} ${v.x},${v.y - 2} ${v.x + 1.8},${v.y - 0.6} ${v.x + 1.8},${v.y + 1.6}`;
             return (
               <polygon
-                key={vertexId}
+                key={`${vertexId}-${building.city ? "c" : "s"}`}
                 points={shape}
                 fill={color}
                 stroke={clickable ? "#b45a37" : "#faf5e9"}
                 strokeWidth={clickable ? 0.7 : 0.45}
                 onClick={tap(clickable ? () => onVertexTap(vertexId) : undefined)}
-                className={clickable ? "cursor-pointer animate-pulse" : undefined}
+                className={clickable ? "cursor-pointer animate-pulse piece-pop" : "piece-pop"}
               />
             );
           })}

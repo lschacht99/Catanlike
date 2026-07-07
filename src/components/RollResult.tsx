@@ -39,24 +39,43 @@ const SHOW_FACE: Record<number, string> = {
 function Face({ value }: { value: number }) {
   return (
     <div
-      className="absolute inset-0 rounded-lg border border-ink/30 bg-cream"
-      style={{ transform: FACE_PLACEMENT[value], backfaceVisibility: "hidden" }}
+      className="absolute inset-0 rounded-[11px]"
+      style={{
+        transform: FACE_PLACEMENT[value],
+        background: "linear-gradient(145deg, #fffdf6 0%, #f6efdd 55%, #eadfc4 100%)",
+        boxShadow:
+          "inset 0 0 0 1px rgba(120,100,60,0.28), inset 0 3px 5px rgba(255,255,255,0.8), inset 0 -4px 6px rgba(120,100,60,0.22)",
+      }}
     >
       {PIPS[value].map(([x, y], i) => (
         <span
           key={i}
-          className="absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink"
-          style={{ left: `${x}%`, top: `${y}%` }}
+          className="absolute h-[8px] w-[8px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{
+            left: `${x}%`,
+            top: `${y}%`,
+            background: "radial-gradient(circle at 35% 30%, #3c5a82 0%, #1e3a5f 55%, #142944 100%)",
+            boxShadow: "inset 0 1px 1.5px rgba(0,0,0,0.45)",
+          }}
         />
       ))}
     </div>
   );
 }
 
-/** A CSS-3D die that tumbles in and settles on `value`. */
+/** A CSS-3D ivory die that drops in, tumbles, and settles on `value`. */
 export function Die3D({ value, delay = 0 }: { value: number; delay?: number }) {
   return (
-    <div style={{ perspective: 600 }} aria-label={`Die showing ${value}`}>
+    <div
+      className="relative pb-2"
+      style={{ perspective: 520 }}
+      aria-label={`Die showing ${value}`}
+    >
+      {/* ground shadow */}
+      <span
+        className="dice-shadow absolute -bottom-0.5 left-1/2 h-2.5 w-12 -translate-x-1/2 rounded-full bg-ink/25 blur-[3px]"
+        style={{ animationDelay: `${delay}ms` }}
+      />
       <div
         className="dice-tumble"
         style={{ width: SIZE, height: SIZE, animationDelay: `${delay}ms` }}

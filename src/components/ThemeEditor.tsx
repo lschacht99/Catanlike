@@ -9,6 +9,83 @@ import { PrimaryButton, SecondaryButton, Shell, SectionLabel } from "./ui";
 const input =
   "rounded-xl border border-line bg-parchment px-3 py-2.5 text-sm text-ink outline-none focus:border-ink/40";
 
+/** Downscale an uploaded file to a compact data URI (localStorage-friendly). */
+function fileToTileImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const max = 256;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+/** Tile artwork input: paste a URL or upload a photo, with preview. */
+function ImagePicker({
+  value,
+  onChange,
+  label,
+}: {
+  value?: string;
+  onChange: (v: string | undefined) => void;
+  label: string;
+}) {
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <span
+        className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-parchment text-[9px] text-ink-faint"
+        style={
+          value
+            ? { backgroundImage: `url(${value})`, backgroundSize: "cover", backgroundPosition: "center" }
+            : undefined
+        }
+      >
+        {!value && "art"}
+      </span>
+      <input
+        value={value?.startsWith("data:") ? "(uploaded image)" : value ?? ""}
+        readOnly={value?.startsWith("data:")}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        placeholder="Tile image URL (optional)"
+        aria-label={`${label} tile image URL`}
+        className={`min-w-0 flex-1 ${input} !py-2 text-xs`}
+      />
+      <label className="shrink-0 cursor-pointer rounded-full border border-line bg-parchment px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink">
+        Upload
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-label={`${label} tile image upload`}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) onChange(await fileToTileImage(file));
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {value && (
+        <button
+          onClick={() => onChange(undefined)}
+          aria-label={`Clear ${label} image`}
+          className="shrink-0 rounded-full border border-line bg-parchment px-2.5 py-2 text-xs text-ink-soft"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ThemeEditor({
   theme,
   onSave,
@@ -20,7 +97,11 @@ export default function ThemeEditor({
 }) {
   const [draft, setDraft] = useState<Theme>(theme);
 
-  function patchResource(key: ResourceKey, field: "label" | "color" | "icon", value: string) {
+  function patchResource(
+    key: ResourceKey,
+    field: "label" | "color" | "icon" | "image",
+    value: string | undefined,
+  ) {
     setDraft((d) => ({
       ...d,
       resources: { ...d.resources, [key]: { ...d.resources[key], [field]: value } },
@@ -83,6 +164,11 @@ export default function ThemeEditor({
                   aria-label={`${key} color`}
                 />
               </div>
+              <ImagePicker
+                label={key}
+                value={r.image}
+                onChange={(v) => patchResource(key, "image", v)}
+              />
             </div>
           );
         })}
@@ -110,6 +196,11 @@ export default function ThemeEditor({
               aria-label="desert color"
             />
           </div>
+          <ImagePicker
+            label="desert"
+            value={draft.desert.image}
+            onChange={(v) => setDraft({ ...draft, desert: { ...draft.desert, image: v } })}
+          />
         </div>
 
         <div className="rounded-2xl border border-line bg-cream p-3 shadow-card">

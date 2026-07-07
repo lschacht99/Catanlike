@@ -59,6 +59,10 @@ Configuration:
 - Bank trade 4:1 · win at 10 points
 - **Roll-result sheet** after every roll showing who harvested what
 - **Map Forge**: generate, score and save boards; replay from the Collection
+- **Illustrated tiles**: procedural vector art per resource (forest,
+  bricks, wheat, pasture, mountains, dunes) recolored by the theme — or
+  load your own tile artwork per resource (image URL or uploaded photo)
+  in the theme editor
 - **Collection**: board themes (with a full theme editor) and saved boards
 - **Stats**: games, wins, win rate and journey history (stored locally)
 - **Profile**: name, avatar, sound/music toggles

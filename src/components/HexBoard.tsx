@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { Board, Building } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS, TOKEN_PIPS } from "@/game/constants";
 import { buildGeometry, hexCenter, hexCorners } from "@/game/geometry";
+import TileArt, { shade } from "./TileArt";
 
 interface HexBoardProps {
   board: Board;
@@ -27,15 +28,6 @@ interface HexBoardProps {
 /** How far the extruded tile sides drop below the top face (SVG units). */
 const TILE_DEPTH = 1.3;
 
-/** Darken a #rrggbb color for the extruded tile sides. */
-function shade(hex: string, factor: number): string {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return "rgba(0,0,0,0.35)";
-  const n = parseInt(hex.slice(1), 16);
-  const channel = (shift: number) =>
-    Math.max(0, Math.round(((n >> shift) & 255) * factor));
-  return `rgb(${channel(16)},${channel(8)},${channel(0)})`;
-}
-
 const EMPTY_BUILDINGS: Record<string, Building> = {};
 const EMPTY_ROADS: Record<string, string> = {};
 
@@ -56,6 +48,8 @@ export default function HexBoard({
 }: HexBoardProps) {
   const geometry = useMemo(() => buildGeometry(board.tiles), [board.tiles]);
   const svgRef = useRef<SVGSVGElement>(null);
+  /** Unique prefix so clip-path ids don't clash between boards on a page. */
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
 
   // --- pan & zoom (single-finger drag, two-finger pinch, wheel) ---
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
@@ -176,22 +170,33 @@ export default function HexBoard({
               >
                 {/* Extruded side: the same hex dropped down, darkened. */}
                 <polygon points={sidePoints} fill={shade(style.color, 0.55)} />
+                <polygon points={points} fill={style.color} />
+                {style.image ? (
+                  <>
+                    <clipPath id={`${uid}t${tile.id}`}>
+                      <polygon points={points} />
+                    </clipPath>
+                    <image
+                      href={style.image}
+                      x={cx - 8.7}
+                      y={cy - 10}
+                      width={17.4}
+                      height={20}
+                      preserveAspectRatio="xMidYMid slice"
+                      clipPath={`url(#${uid}t${tile.id})`}
+                      className="pointer-events-none"
+                    />
+                  </>
+                ) : (
+                  <TileArt resource={tile.resource} color={style.color} cx={cx} cy={cy} />
+                )}
                 <polygon
                   points={points}
-                  fill={style.color}
+                  fill="none"
                   stroke={targetable ? "#b45a37" : "#faf5e9"}
                   strokeWidth={targetable ? 1 : 0.7}
                   className={targetable ? "animate-pulse" : undefined}
                 />
-                <text
-                  x={cx}
-                  y={cy - 4.2}
-                  textAnchor="middle"
-                  fontSize="4"
-                  className="pointer-events-none"
-                >
-                  {style.icon}
-                </text>
                 {tile.token !== null && (
                   <g className="pointer-events-none">
                     <circle cx={cx} cy={cy + 1.8} r="3.4" fill="#faf5e9" stroke="#b9a77f" strokeWidth="0.3" />

@@ -1,16 +1,11 @@
 import type { GameState } from "@/types/game";
 import { CITIES_KNIGHTS_POINTS_TO_WIN, VICTORY_POINTS_TO_WIN } from "./constants";
 
-/** Victory points: 1 per settlement, 2 per city, and 1 per knight in the variant. */
+/** Victory points: 1 per settlement, 2 per city, plus variant bonuses. */
 export function victoryPoints(G: GameState, player: string): number {
-  let points = 0;
+  let points = G.players[player]?.victoryBonus ?? 0;
   for (const b of Object.values(G.buildings)) {
     if (b.player === player) points += b.city ? 2 : 1;
-  }
-  if (G.variant === "cities-knights") {
-    for (const owner of Object.values(G.knights)) {
-      if (owner === player) points += 1;
-    }
   }
   return points;
 }

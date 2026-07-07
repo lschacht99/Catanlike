@@ -1,22 +1,34 @@
 import type { Game } from "boardgame.io";
-import type { Board, GameState, OnlineSetupData } from "@/types/game";
-import { devDeck, emptyResources, PLAYER_NAMES, PROGRESS_DECK } from "./constants";
+import type { Board, GameState, GameVariant, OnlineSetupData } from "@/types/game";
+import {
+  devDeck,
+  emptyCommodities,
+  emptyImprovements,
+  emptyResources,
+  PLAYER_NAMES,
+  PROGRESS_DECK,
+} from "./constants";
 import { generateBoard } from "./generator";
 import { winner } from "./scoring";
 import {
+  activateKnight,
   bankTrade,
   buildCity,
+  buildKnight,
   buildRoad,
   buildSettlement,
   buyDevCard,
   endTurn,
+  improveCity,
   moveBandit,
   placeRoad,
   placeSettlement,
   playKnight,
   playMonopoly,
+  playProgressCard,
   playRoadBuilding,
   playYearOfPlenty,
+  playerTrade,
   rollDice,
 } from "./moves";
 
@@ -29,6 +41,7 @@ export function initialState(
   numPlayers: number,
   shuffledDeck: GameState["devDeck"],
   names?: string[],
+  variant: GameVariant = "base",
 ): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
@@ -36,17 +49,24 @@ export function initialState(
       resources: emptyResources(),
       devCards: [],
       knightsPlayed: 0,
+      commodities: emptyCommodities(),
+      improvements: emptyImprovements(),
+      progressCards: [],
+      victoryBonus: 0,
     };
   }
+  const finalNames =
+    names && names.length === numPlayers
+      ? names
+      : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]);
   const desert = board.tiles.find((t) => t.resource === "desert");
   return {
     numPlayers,
     board,
     players,
-    names:
-      names && names.length === numPlayers
-        ? names
-        : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]),
+    names: finalNames,
+    playerNames: finalNames,
+    variant,
     buildings: {},
     roads: {},
     knights: {},
@@ -95,7 +115,12 @@ const PHASES: Game<GameState>["phases"] = {
       buildRoad,
       buildSettlement,
       buildCity,
+      buildKnight,
+      activateKnight,
+      improveCity,
+      playProgressCard,
       bankTrade,
+      playerTrade,
       buyDevCard,
       playKnight,
       playRoadBuilding,
@@ -104,8 +129,6 @@ const PHASES: Game<GameState>["phases"] = {
       endTurn,
     },
     turn: {
-      // The first placer also takes the first turn, regardless of where the
-      // setup snake left the play order.
       order: {
         first: () => 0,
         next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,
@@ -113,6 +136,7 @@ const PHASES: Game<GameState>["phases"] = {
       onBegin: ({ G }) => {
         G.hasRolled = false;
         G.lastRoll = null;
+        G.lastEventDie = null;
         G.mustMoveBandit = false;
         G.freeRoads = 0;
         G.playedDevCardThisTurn = false;
@@ -134,11 +158,12 @@ export function createHexIslesGame(
   board: Board,
   numPlayers: number,
   names?: string[],
+  variant: GameVariant = "base",
 ): Game<GameState> {
   return {
     name: "hamsa-nomads",
     setup: ({ random }) =>
-      initialState(board, numPlayers, random.Shuffle(devDeck()), names),
+      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant),
     endIf: END_IF,
     phases: PHASES,
   };

@@ -8,19 +8,21 @@ export const HAMSA_THEME: Theme = {
       label: "Olive Route",
       color: "#758b49",
       icon: "🫒",
-      tilePrompt: "olive grove route hex tile, warm hamsa nomads style",
+      tileArt: "/olive-route.svg",
+      tilePrompt: "olive grove route hex tile, warm Hamsa Nomads style",
     },
     brick: {
       label: "Terracotta Stop",
       color: "#b96a4a",
       icon: "🧱",
-      tilePrompt: "terracotta kasbah stop hex tile",
+      tileArt: "/terracotta-stop.svg",
+      tilePrompt: "terracotta travel stop hex tile",
     },
     grain: {
       label: "Market Harvest",
       color: "#d9b54f",
       icon: "🌾",
-      tilePrompt: "golden travel market harvest hex tile",
+      tilePrompt: "golden market harvest hex tile",
     },
     wool: {
       label: "Tent Weave",
@@ -43,5 +45,5 @@ export const HAMSA_THEME: Theme = {
   },
   bandit: { label: "Lost Luggage", icon: "🧳" },
   terms: { road: "Route", settlement: "Camp", city: "Medina", knight: "Scout" },
-  board: { sea: "#17324d" },
+  board: { sea: "#f6ecd9" },
 };

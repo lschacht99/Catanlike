@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ResourceCounts, ResourceKey } from "@/types/game";
+import type { PlayerMode, PlayerState, ResourceCounts, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { BANK_TRADE_RATE, RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import Sheet from "./Sheet";
@@ -11,11 +11,36 @@ interface TradePanelProps {
   resources: ResourceCounts;
   onTrade: (give: ResourceKey, receive: ResourceKey) => void;
   onClose: () => void;
+  players?: Record<string, PlayerState>;
+  currentPlayer?: string;
+  playerNames?: string[];
+  playerModes?: PlayerMode[];
+  onPlayerTrade?: (
+    targetPlayer: string,
+    give: ResourceKey,
+    giveAmount: number,
+    receive: ResourceKey,
+    receiveAmount: number,
+  ) => void;
 }
 
-export default function TradePanel({ theme, resources, onTrade, onClose }: TradePanelProps) {
+export default function TradePanel({
+  theme,
+  resources,
+  onTrade,
+  onClose,
+  players = {},
+  currentPlayer = "0",
+  playerNames = [],
+  playerModes = [],
+  onPlayerTrade,
+}: TradePanelProps) {
+  const [mode, setMode] = useState<"bank" | "player">("bank");
   const [give, setGive] = useState<ResourceKey | null>(null);
   const [receive, setReceive] = useState<ResourceKey | null>(null);
+  const [targetPlayer, setTargetPlayer] = useState<string | null>(null);
+  const [giveAmount, setGiveAmount] = useState(1);
+  const [receiveAmount, setReceiveAmount] = useState(1);
 
   const rivals = Object.keys(players).filter((id) => id !== currentPlayer);
   const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
@@ -23,6 +48,7 @@ export default function TradePanel({ theme, resources, onTrade, onClose }: Trade
 
   const canBankConfirm =
     give !== null && receive !== null && give !== receive && resources[give] >= BANK_TRADE_RATE;
+
   const canPlayerConfirm =
     !!onPlayerTrade &&
     !!targetPlayer &&
@@ -30,11 +56,14 @@ export default function TradePanel({ theme, resources, onTrade, onClose }: Trade
     give !== null &&
     receive !== null &&
     give !== receive &&
-    resources[give] >= BANK_TRADE_RATE;
+    resources[give] >= giveAmount &&
+    targetHand[receive] >= receiveAmount &&
+    giveAmount >= 1 &&
+    receiveAmount >= 1;
 
   function rivalName(id: string): string {
     const base = playerNames[Number(id)] ?? `Player ${Number(id) + 1}`;
-    return playerModes[Number(id)] === "bot" ? `${base} 🤖` : base;
+    return playerModes[Number(id)] === "bot" ? `${base} CPU` : base;
   }
 
   function Row({
@@ -89,6 +118,7 @@ export default function TradePanel({ theme, resources, onTrade, onClose }: Trade
     max: number;
     label: string;
   }) {
+    const safeMax = Math.max(1, max);
     return (
       <div className="flex items-center gap-2">
         <button
@@ -100,7 +130,7 @@ export default function TradePanel({ theme, resources, onTrade, onClose }: Trade
         </button>
         <span className="w-8 text-center text-lg font-bold text-ink">{value}</span>
         <button
-          onClick={() => onChange(Math.min(Math.max(1, max), value + 1))}
+          onClick={() => onChange(Math.min(safeMax, value + 1))}
           aria-label={`Increase ${label}`}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-cream text-lg font-bold text-ink"
         >
@@ -119,15 +149,15 @@ export default function TradePanel({ theme, resources, onTrade, onClose }: Trade
               { id: "bank", label: "Market Gate" },
               { id: "player", label: "With Players" },
             ] as const
-          ).map((t) => (
+          ).map((tab) => (
             <button
-              key={t.id}
-              onClick={() => setMode(t.id)}
+              key={tab.id}
+              onClick={() => setMode(tab.id)}
               className={`rounded-full py-2 text-xs font-bold uppercase tracking-[0.15em] ${
-                mode === t.id ? "bg-ink text-cream" : "text-ink-soft"
+                mode === tab.id ? "bg-ink text-cream" : "text-ink-soft"
               }`}
             >
-              {t.label}
+              {tab.label}
             </button>
           ))}
         </div>

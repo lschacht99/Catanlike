@@ -1,18 +1,15 @@
 import type { Game } from "boardgame.io";
 import type { Board, GameState, OnlineSetupData } from "@/types/game";
-import { devDeck, emptyResources, PLAYER_NAMES } from "./constants";
+import { devDeck, emptyResources, PLAYER_NAMES, PROGRESS_DECK } from "./constants";
 import { generateBoard } from "./generator";
 import { winner } from "./scoring";
 import {
-  activateKnight,
   bankTrade,
   buildCity,
-  buildKnight,
   buildRoad,
   buildSettlement,
   buyDevCard,
   endTurn,
-  improveCity,
   moveBandit,
   placeRoad,
   placeSettlement,

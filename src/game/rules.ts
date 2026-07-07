@@ -48,7 +48,8 @@ export function pieceCounts(G: GameState, player: string) {
     else settlements++;
   }
   const roads = Object.values(G.roads).filter((p) => p === player).length;
-  return { roads, settlements, cities };
+  const knights = Object.values(G.knights ?? {}).filter((p) => p === player).length;
+  return { roads, settlements, cities, knights };
 }
 
 /** Distance rule: a settlement may not be adjacent to any other building. */
@@ -113,6 +114,16 @@ export function validCitySpots(G: GameState, player: string): string[] {
   if (pieceCounts(G, player).cities >= PIECE_LIMITS.city) return [];
   return Object.entries(G.buildings)
     .filter(([, b]) => b.player === player && !b.city)
+    .map(([id]) => id);
+}
+
+/** Vertices where `player` may place a knight on their own built spot. */
+export function validKnightSpots(G: GameState, player: string): string[] {
+  if (G.variant !== "cities-knights") return [];
+  if (pieceCounts(G, player).knights >= PIECE_LIMITS.knight) return [];
+  const knights = G.knights ?? {};
+  return Object.entries(G.buildings)
+    .filter(([id, b]) => b.player === player && !knights[id])
     .map(([id]) => id);
 }
 

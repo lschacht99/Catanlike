@@ -78,3 +78,128 @@ body {
 .bandit-hop {
   animation: bandit-hop 0.6s ease-in-out;
 }
+
+body {
+  color: white;
+}
+
+.game-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(56, 189, 248, 0.18), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(250, 204, 21, 0.14), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.12), transparent 34%),
+    linear-gradient(180deg, #020617 0%, #08111f 48%, #020617 100%);
+}
+
+.game-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at center, black, transparent 76%);
+}
+
+.ambient-orb {
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 999px;
+  filter: blur(42px);
+  opacity: 0.34;
+  animation: driftOrb 9s ease-in-out infinite alternate;
+}
+
+.ambient-orb-a {
+  left: -5rem;
+  top: 8rem;
+  background: #38bdf8;
+}
+
+.ambient-orb-b {
+  right: -6rem;
+  bottom: 6rem;
+  background: #f59e0b;
+  animation-delay: -3s;
+}
+
+.board-card {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(14, 165, 233, 0.18), transparent 48%),
+    rgba(2, 6, 23, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
+.board-card svg {
+  filter: drop-shadow(0 20px 36px rgba(0, 0, 0, 0.34));
+}
+
+.dice-popup {
+  animation: dicePopup 1.15s ease-out both;
+}
+
+.dice-face {
+  display: grid;
+  height: 4rem;
+  width: 4rem;
+  place-items: center;
+  border-radius: 1rem;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 900;
+  box-shadow: inset -0.45rem -0.45rem 0 #cbd5e1, 0 1rem 2.2rem rgba(0, 0, 0, 0.35);
+  animation: diceFaceSpin 0.62s cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes dicePopup {
+  0% { opacity: 0; transform: scale(0.82) translateY(1rem); }
+  18% { opacity: 1; transform: scale(1.04) translateY(0); }
+  78% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.96) translateY(-0.7rem); }
+}
+
+@keyframes diceFaceSpin {
+  0% { transform: rotateX(0deg) rotateZ(0deg); }
+  72% { transform: rotateX(540deg) rotateZ(18deg); }
+  100% { transform: rotateX(720deg) rotateZ(0deg); }
+}
+
+@keyframes driftOrb {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(1.2rem, -1rem, 0) scale(1.12); }
+}
+
+/* Legacy pseudo-3D renderer kept for the gallery/experiments, not the main playable board. */
+.scene3d { min-height: 58vh; display: grid; place-items: center; gap: 0.75rem; perspective: 900px; overflow: hidden; touch-action: none; }
+.board3d { position: relative; width: min(96vw, 680px); height: min(62vh, 520px); transform: rotateX(58deg) rotateZ(-18deg); transform-style: preserve-3d; }
+.sea3d { position: absolute; inset: 6%; border-radius: 46%; background: radial-gradient(circle at 35% 30%, #5ac8fa, #17658d 62%, #08334d); transform: translateZ(-18px); box-shadow: inset 0 0 42px #ffffff55, 0 20px 70px #061b2dcc; }
+.island3d { position: absolute; left: 50%; top: 50%; transform-style: preserve-3d; }
+.hex3d { --x: 0px; --y: 0px; --h: 16px; --c: #779; position: absolute; width: 76px; height: 86px; transform-style: preserve-3d; transform: translate3d(calc(var(--x) - 38px), calc(var(--y) - 43px), var(--h)); clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%); background: linear-gradient(145deg, color-mix(in srgb, var(--c), white 28%), var(--c)); box-shadow: 0 calc(var(--h) * .45) 0 color-mix(in srgb, var(--c), black 36%), 0 18px 20px #0005; display: grid; place-items: center; transition: transform .25s ease; }
+.hex3d.producing { animation: producePulse 1s ease 2; }
+.hex-top { transform: rotateZ(18deg) rotateX(-58deg); display: grid; place-items: center; gap: 0.1rem; font-size: 1.25rem; color: #1f2937; text-shadow: 0 1px #fff8; }
+.hex-top b { display: grid; place-items: center; min-width: 1.7rem; min-height: 1.7rem; border-radius: 999px; background: #fff9; font-size: .9rem; }
+.hex-top b.hot { color: #b91c1c; font-weight: 900; }
+.trees, .sheep, .crops, .rocks, .clay { position: absolute; transform: translateZ(24px) rotateZ(18deg) rotateX(-58deg); font-style: normal; pointer-events: none; }
+.sheep { animation: sheepBob 1.8s ease-in-out infinite; }
+.settlement3d, .city3d { position: absolute; color: white; font-size: 2rem; text-shadow: 0 3px 2px #0007; transform: translate3d(-125px, -25px, 58px) rotateZ(18deg) rotateX(-58deg); }
+.settlement3d.p1 { transform: translate3d(98px, 28px, 58px) rotateZ(18deg) rotateX(-58deg); color: #f97316; }
+.city3d { transform: translate3d(-15px, 115px, 62px) rotateZ(18deg) rotateX(-58deg); color: #60a5fa; }
+.road3d { position: absolute; width: 92px; height: 10px; border-radius: 999px; background: #7c4a2d; box-shadow: 0 4px 0 #4b2b18; transform: translate3d(-72px, 41px, 40px) rotateZ(30deg); }
+.road3d.r2 { transform: translate3d(20px, -58px, 42px) rotateZ(-30deg); }
+.diceTray { display: flex; gap: 1rem; justify-content: center; transform-style: preserve-3d; }
+.die { width: 52px; height: 52px; border-radius: 12px; background: #fff; display: grid; place-items: center; box-shadow: 0 8px 20px #0005, inset -8px -8px 0 #d1d5db; font-weight: 900; font-size: 1.4rem; transform: rotateX(18deg) rotateY(-18deg); }
+.rolling .die { animation: diceTumble .65s cubic-bezier(.2,.8,.2,1); }
+@keyframes diceTumble { 0% { transform: rotateX(0) rotateY(0) translateY(-20px); } 70% { transform: rotateX(540deg) rotateY(420deg) translateY(0); } 100% { transform: rotateX(18deg) rotateY(-18deg); } }
+@keyframes producePulse { 50% { transform: translate3d(calc(var(--x) - 38px), calc(var(--y) - 43px), calc(var(--h) + 18px)); filter: saturate(1.4) brightness(1.12); } }
+@keyframes sheepBob { 50% { translate: 0 -5px; } }
+@media (min-width: 760px) { .scene3d { min-height: 68vh; } .die { width: 64px; height: 64px; } }

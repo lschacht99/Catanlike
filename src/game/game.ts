@@ -4,12 +4,15 @@ import { devDeck, emptyResources, PLAYER_NAMES } from "./constants";
 import { generateBoard } from "./generator";
 import { winner } from "./scoring";
 import {
+  activateKnight,
   bankTrade,
   buildCity,
+  buildKnight,
   buildRoad,
   buildSettlement,
   buyDevCard,
   endTurn,
+  improveCity,
   moveBandit,
   placeRoad,
   placeSettlement,
@@ -20,7 +23,6 @@ import {
   rollDice,
 } from "./moves";
 
-/** Setup order: 0,1,...,n-1 then back n-1,...,0 (snake draft). */
 export function setupOrder(numPlayers: number, step: number): number {
   return step < numPlayers ? step : 2 * numPlayers - 1 - step;
 }
@@ -50,6 +52,12 @@ export function initialState(
         : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]),
     buildings: {},
     roads: {},
+    knights: {},
+    activeKnights: {},
+    barbarianPosition: 0,
+    lastEventDie: null,
+    progressDeck: [...PROGRESS_DECK],
+    progressDiscards: [],
     banditTile: desert ? desert.id : -1,
     devDeck: shuffledDeck,
     largestArmyHolder: null,

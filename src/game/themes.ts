@@ -1,9 +1,8 @@
 import type { Theme } from "@/types/theme";
+import { HAMSA_THEME } from "./hamsa-theme";
+import { ISRAEL_THEME } from "./israel-theme";
+import { JEWISH_THEME } from "./jewish-theme";
 
-/**
- * Built-in themes. The engine only ever sees canonical keys
- * (wood/brick/grain/wool/ore); themes are a pure presentation layer.
- */
 export const CLASSIC_THEME: Theme = {
   id: "classic",
   name: "Classic Isles",
@@ -72,7 +71,13 @@ export const JAPAN_THEME: Theme = {
   board: { sea: "#e5dccb" },
 };
 
-export const BUILTIN_THEMES: Theme[] = [CLASSIC_THEME, JAPAN_THEME];
+export const BUILTIN_THEMES: Theme[] = [
+  CLASSIC_THEME,
+  JAPAN_THEME,
+  ISRAEL_THEME,
+  JEWISH_THEME,
+  HAMSA_THEME,
+];
 
 const CUSTOM_THEMES_KEY = "hexisles:themes";
 

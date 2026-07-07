@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "") ?? "";
+const withBasePath = (path: string) => `${basePath}${path}`;
+
 export const metadata: Metadata = {
   title: "Hamsa Nomads",
   description:
@@ -11,7 +14,7 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Hamsa Nomads",
   },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: withBasePath("/icon.svg"), apple: withBasePath("/icon.svg") },
 };
 
 export const viewport: Viewport = {

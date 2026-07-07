@@ -1,4 +1,5 @@
-import type { Board, GameConfig } from "@/types/game";
+import type { Board, GameConfig, PlayerMode } from "@/types/game";
+import { PLAYER_NAMES } from "@/game/constants";
 
 const ACTIVE_GAME_KEY = "hexisles:activeGame";
 const SAVED_BOARDS_KEY = "hexisles:boards";
@@ -11,17 +12,36 @@ export interface SavedBoard {
 }
 
 export function saveGameConfig(config: GameConfig): void {
-  window.localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(config));
+  window.localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(normalizeGameConfig(config)));
 }
 
 export function loadGameConfig(): GameConfig | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(ACTIVE_GAME_KEY);
-    return raw ? (JSON.parse(raw) as GameConfig) : null;
+    return raw ? normalizeGameConfig(JSON.parse(raw) as GameConfig) : null;
   } catch {
     return null;
   }
+}
+
+function normalizeGameConfig(config: GameConfig): GameConfig {
+  return {
+    ...config,
+    playerModes: normalizePlayerModes(config.numPlayers, config.playerModes),
+    playerNames: normalizePlayerNames(config.numPlayers, config.playerNames),
+    variant: config.variant ?? "base",
+  };
+}
+
+function normalizePlayerModes(numPlayers: number, modes?: PlayerMode[]): PlayerMode[] {
+  if (modes?.length === numPlayers) return modes;
+  if (numPlayers === 4) return ["human", "human", "bot", "bot"];
+  return Array.from({ length: numPlayers }, () => "human");
+}
+
+function normalizePlayerNames(numPlayers: number, names?: string[]): string[] {
+  return Array.from({ length: numPlayers }, (_, i) => names?.[i]?.trim() || PLAYER_NAMES[i] || `Player ${i + 1}`);
 }
 
 export function loadSavedBoards(): SavedBoard[] {

@@ -105,8 +105,9 @@ export function victoryPoints(G: GameState, player: string): number {
 
 /** The winning player id, or null if the game continues. */
 export function winner(G: GameState): string | null {
+  const target = G.variant === "cities-knights" ? CITIES_KNIGHTS_POINTS_TO_WIN : VICTORY_POINTS_TO_WIN;
   for (const player of Object.keys(G.players)) {
-    if (victoryPoints(G, player) >= VICTORY_POINTS_TO_WIN) return player;
+    if (victoryPoints(G, player) >= target) return player;
   }
   return null;
 }

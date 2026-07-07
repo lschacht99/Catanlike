@@ -1,0 +1,20 @@
+{
+  "name": "Hamsa Nomads Journey Hex Pack",
+  "version": "1.0.0",
+  "style": "cream paper, navy, terracotta, olive, sand, brass, travel stamps",
+  "hexes": {
+    "wood": "/hex-olive-route.svg",
+    "brick": "/hex-terracotta-stop.svg",
+    "grain": "/hex-market-harvest.svg",
+    "wool": "/hex-tent-weave.svg",
+    "ore": "/hex-compass-brass.svg",
+    "desert": "/hex-passport-sands.svg",
+    "sea": "/hex-coastal-sea.svg"
+  },
+  "pieces": {
+    "road": "route bar with navy, terracotta, olive, or brass player color",
+    "settlement": "small medina/camp building",
+    "city": "larger domed medina building",
+    "knight": "round scout shield marker"
+  }
+}

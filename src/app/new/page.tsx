@@ -23,7 +23,7 @@ const DEFAULT_NAMES = ["Player 1", "Player 2", "Player 3", "Player 4"];
 
 export default function NewGamePage() {
   const router = useRouter();
-  const [numPlayers, setNumPlayers] = useState(4);
+  const [numPlayers, setNumPlayers] = useState(2);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
@@ -31,7 +31,7 @@ export default function NewGamePage() {
 
   useEffect(() => {
     setThemes(allThemes());
-    setBoard(generateBoard());
+    setBoard(createDuelBoard());
   }, []);
 
   const theme = themes.find((t) => t.id === themeId) ?? themes[0];

@@ -26,7 +26,7 @@ Other commands:
 ```bash
 npm test           # vitest — generator, rules, dev-card and scoring tests
 npm run build      # production build
-npm start          # serve the production build
+npm start          # serve the static export from ./out
 ```
 
 Configuration:

@@ -8,10 +8,9 @@ import type { GameConfig, GameState } from "@/types/game";
 import { createHexIslesGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import { loadGameConfig } from "@/lib/storage";
-import GameBoard from "@/components/GameBoard";
+import GameBoardPlay from "@/components/GameBoardPlay";
 
 export default function GamePage() {
-  // undefined = still loading from localStorage, null = no game configured.
   const [config, setConfig] = useState<GameConfig | null | undefined>(undefined);
 
   useEffect(() => {
@@ -21,8 +20,10 @@ export default function GamePage() {
   const HexIslesClient = useMemo(() => {
     if (!config) return null;
     const theme = getTheme(config.themeId);
+    const playerModes = config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human" as const);
+    const variant = config.variant ?? "base";
     const Board = (props: BoardProps<GameState>) => (
-      <GameBoard {...props} theme={theme} />
+      <GameBoardPlay {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
       game: createHexIslesGame(config.board, config.numPlayers, config.playerNames),

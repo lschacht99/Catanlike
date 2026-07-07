@@ -7,6 +7,8 @@ export interface ResourceTheme {
   color: string;
   /** Single emoji or short glyph used as the resource icon. */
   icon: string;
+  /** Optional public art path used inside the board hex. */
+  tileArt?: string;
   /** Prompt reserved for future AI-generated tile art. */
   tilePrompt?: string;
 }

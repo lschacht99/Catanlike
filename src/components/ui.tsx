@@ -140,28 +140,17 @@ export function Chip({
   );
 }
 
-/** Simplified hamsa-hand mark used as the app logo. */
+/** Real Hamsa Nomads PNG logo mark. */
 export function HamsaLogo({ size = 64, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg
+    <img
+      src="/hamsa-logo-mark.png"
+      alt="Hamsa Nomads"
       width={size}
       height={size}
-      viewBox="0 0 64 64"
-      fill="none"
-      className={className}
-      aria-hidden
-    >
-      <g stroke="#b45a37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        {/* palm */}
-        <path d="M22 30v-9a3 3 0 0 1 6 0v7-13a3 3 0 0 1 6 0v13-11a3 3 0 0 1 6 0v11" />
-        <path d="M22 30c-2-4-7-4-8 0-1 3 2 6 5 8l3 2" />
-        <path d="M40 28c2-4 7-4 8 0 1 3-2 6-5 8l-3 2" />
-        <path d="M22 30v6c0 9 4 14 10 14s10-5 10-14v-8" />
-      </g>
-      {/* eye */}
-      <circle cx="32" cy="38" r="4.5" stroke="#1e3a5f" strokeWidth="2" />
-      <circle cx="32" cy="38" r="1.6" fill="#1e3a5f" />
-    </svg>
+      className={`object-contain ${className}`}
+      style={{ width: size, height: size }}
+    />
   );
 }
 

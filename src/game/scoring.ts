@@ -1,6 +1,7 @@
 import type { GameState } from "@/types/game";
 import {
   BONUS_POINTS,
+  CITIES_KNIGHTS_POINTS_TO_WIN,
   LARGEST_ARMY_MIN,
   LONGEST_ROAD_MIN,
   VICTORY_POINTS_TO_WIN,

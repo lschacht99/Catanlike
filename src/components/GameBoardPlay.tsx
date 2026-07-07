@@ -3,12 +3,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { BoardProps } from "boardgame.io/react";
-import type { GameState, GameVariant, PlayerMode, ResourceKey } from "@/types/game";
+import type {
+  GameState,
+  GameVariant,
+  PlayerMode,
+  ProgressCardType,
+  ProgressTrackKey,
+  ResourceKey,
+} from "@/types/game";
 import type { Theme } from "@/types/theme";
 import {
   CITIES_KNIGHTS_POINTS_TO_WIN,
+  COMMODITY_KEYS_ORDERED,
   PLAYER_COLORS,
+  PROGRESS_CARD_LABELS,
   TOKEN_PIPS,
+  TRACK_COMMODITY,
+  TRACK_KEYS_ORDERED,
   VICTORY_POINTS_TO_WIN,
   type BuildableKind,
 } from "@/game/constants";
@@ -36,6 +47,9 @@ export interface GameBoardPlayProps extends BoardProps<GameState> {
 
 type ExtendedMoves = BoardProps<GameState>["moves"] & {
   buildKnight?: (vertexId: string) => void;
+  activateKnight?: (vertexId?: string) => void;
+  improveCity?: (track: ProgressTrackKey) => void;
+  playProgressCard?: (card: ProgressCardType) => void;
   playerTrade?: (
     targetPlayer: string,
     give: ResourceKey,
@@ -44,6 +58,8 @@ type ExtendedMoves = BoardProps<GameState>["moves"] & {
     receiveAmount: number,
   ) => void;
 };
+
+type PendingAction = { title: string; body: string; run: () => void };
 
 export default function GameBoardPlay({
   G,
@@ -56,6 +72,7 @@ export default function GameBoardPlay({
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
   const [diceFlash, setDiceFlash] = useState<[number, number] | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
@@ -65,7 +82,22 @@ export default function GameBoardPlay({
   const currentIsCpu = playerModes[Number(current)] === "bot";
   const boardMoves = moves as ExtendedMoves;
   const names = G.playerNames;
+  const player = G.players[current];
+  const commodities = player.commodities ?? { coin: 0, cloth: 0, book: 0 };
+  const improvements = player.improvements ?? { trade: 0, politics: 0, science: 0 };
+  const progressCards = player.progressCards ?? [];
+  const activeKnights = G.activeKnights ?? {};
   const targetPoints = variant === "cities-knights" ? CITIES_KNIGHTS_POINTS_TO_WIN : VICTORY_POINTS_TO_WIN;
+  const ownInactiveKnight = Object.entries(G.knights ?? {}).find(([id, owner]) => owner === current && !activeKnights[id])?.[0];
+  const hasCity = Object.values(G.buildings).some((b) => b.player === current && b.city);
+
+  function ask(title: string, body: string, run: () => void) {
+    if (currentIsCpu) {
+      run();
+      return;
+    }
+    setPendingAction({ title, body, run });
+  }
 
   useEffect(() => {
     if (!G.lastRoll) return;
@@ -137,6 +169,16 @@ export default function GameBoardPlay({
         return;
       }
       const hand = G.players[current].resources;
+      const cpuCards = G.players[current].progressCards ?? [];
+      if (variant === "cities-knights" && cpuCards[0] && boardMoves.playProgressCard) {
+        boardMoves.playProgressCard(cpuCards[0]);
+        return;
+      }
+      const inactive = Object.entries(G.knights ?? {}).find(([id, owner]) => owner === current && !G.activeKnights?.[id])?.[0];
+      if (variant === "cities-knights" && inactive && hand.grain > 0 && boardMoves.activateKnight) {
+        boardMoves.activateKnight(inactive);
+        return;
+      }
       const city = pickBestCity(G, validCitySpots(G, current));
       if (city && canAfford(hand, "city")) {
         moves.buildCity(city);
@@ -164,35 +206,35 @@ export default function GameBoardPlay({
 
   function onVertexTap(id: string) {
     if (currentIsCpu) return;
-    if (inSetup) moves.placeSettlement(id);
+    if (inSetup) ask("Confirm settlement", "Place your settlement on this corner.", () => moves.placeSettlement(id));
     else if (buildMode === "settlement") {
-      moves.buildSettlement(id);
+      ask("Build settlement", "Spend wood, brick, grain, and wool.", () => moves.buildSettlement(id));
       setBuildMode(null);
     } else if (buildMode === "city") {
-      moves.buildCity(id);
+      ask("Upgrade city", "Spend 2 grain and 3 ore to upgrade this settlement.", () => moves.buildCity(id));
       setBuildMode(null);
     } else if (buildMode === "knight" && boardMoves.buildKnight) {
-      boardMoves.buildKnight(id);
+      ask("Train knight", "Spend grain, wool, and ore. New knights begin inactive.", () => boardMoves.buildKnight?.(id));
       setBuildMode(null);
     }
   }
 
   function onEdgeTap(id: string) {
     if (currentIsCpu) return;
-    if (inSetup) moves.placeRoad(id);
+    if (inSetup) ask("Confirm route", "Place your starting route next to the settlement.", () => moves.placeRoad(id));
     else if (buildMode === "road") {
-      moves.buildRoad(id);
+      ask("Build route", "Spend 1 wood and 1 brick.", () => moves.buildRoad(id));
       setBuildMode(null);
     }
   }
 
   function onTileTap(id: number) {
     if (currentIsCpu) return;
-    if (G.mustMoveBandit) moves.moveBandit(id);
+    if (G.mustMoveBandit) ask("Move bandit", "Move the bandit to this tile and steal if possible.", () => moves.moveBandit(id));
   }
 
   const lastLog = G.log[G.log.length - 1];
-  const variantLabel = variant === "cities-knights" ? "Cities & Knights Lite" : "Base game";
+  const variantLabel = variant === "cities-knights" ? "Cities & Knights" : "Base game";
 
   return (
     <div className="game-shell flex h-dvh flex-col overflow-hidden bg-slate-950">
@@ -207,6 +249,7 @@ export default function GameBoardPlay({
               <span className="dice-face">{diceFlash[1]}</span>
             </div>
             <p className="mt-3 text-sm font-bold text-yellow-300">Rolled {diceFlash[0] + diceFlash[1]}</p>
+            {variant === "cities-knights" && G.lastEventDie && <p className="mt-1 text-xs text-white/60">Event: {G.lastEventDie}</p>}
           </div>
         </div>
       )}
@@ -247,14 +290,43 @@ export default function GameBoardPlay({
           <span className="text-sm font-black" style={{ color: PLAYER_COLORS[Number(current)] }}>{names[Number(current)]}&rsquo;s turn</span>
           {G.lastRoll && <span className="rounded-lg bg-white/10 px-2 py-0.5 text-sm font-bold text-white">🎲 {G.lastRoll[0]} + {G.lastRoll[1]} = {G.lastRoll[0] + G.lastRoll[1]}</span>}
         </div>
+
+        {variant === "cities-knights" && (
+          <div className="mb-2 rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-white/70">
+            <div className="flex items-center justify-between gap-2">
+              <span>Raiders: {G.barbarianPosition ?? 0}/7</span>
+              <span>Event: {G.lastEventDie ?? "—"}</span>
+              <span>Cards: {progressCards.length}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+              {COMMODITY_KEYS_ORDERED.map((key) => <span key={key} className="rounded-lg bg-black/20 px-1 py-1">{key}: {commodities[key]}</span>)}
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+              {TRACK_KEYS_ORDERED.map((track) => <span key={track} className="rounded-lg bg-black/20 px-1 py-1">{track}: {improvements[track]}</span>)}
+            </div>
+          </div>
+        )}
+
         <PlayerHand resources={resources} theme={theme} />
+
         {!inSetup && (
           <>
             <div className="mt-2"><BuildMenu theme={theme} resources={resources} pieces={pieces} placeable={placeable} activeMode={buildMode} onPick={(kind) => setBuildMode(kind)} includeKnights={variant === "cities-knights"} /></div>
+            {variant === "cities-knights" && (
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <button disabled={currentIsCpu || !G.hasRolled || !ownInactiveKnight || resources.grain < 1 || !!gameover} onClick={() => ask("Activate knight", "Spend 1 grain. Active knights defend against raiders.", () => boardMoves.activateKnight?.(ownInactiveKnight))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">Activate knight</button>
+                {TRACK_KEYS_ORDERED.map((track) => {
+                  const cost = (improvements[track] ?? 0) + 1;
+                  const commodity = TRACK_COMMODITY[track];
+                  return <button key={track} disabled={currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
+                })}
+                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
+              </div>
+            )}
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button disabled={currentIsCpu || G.hasRolled || !!gameover} onClick={() => moves.rollDice()} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
+              <button disabled={currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
               <button disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
-              <button disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => { setBuildMode(null); moves.endTurn(); }} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
+              <button disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
             </div>
           </>
         )}
@@ -268,10 +340,23 @@ export default function GameBoardPlay({
           currentPlayer={current}
           playerNames={names}
           playerModes={playerModes}
-          onTrade={(give, receive) => moves.bankTrade(give, receive)}
-          onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount)}
+          onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade 4 ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
+          onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => { setShowTrade(false); ask("Confirm player trade", `Give ${giveAmount} ${give} and receive ${receiveAmount} ${receive}.`, () => boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount)); }}
           onClose={() => setShowTrade(false)}
         />
+      )}
+
+      {pendingAction && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-5">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-5 text-white shadow-2xl">
+            <h2 className="text-lg font-black">{pendingAction.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-white/65">{pendingAction.body}</p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button onClick={() => setPendingAction(null)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white">Cancel</button>
+              <button onClick={() => { const run = pendingAction.run; setPendingAction(null); run(); }} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900">Confirm</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {gameover && (

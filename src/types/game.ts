@@ -76,10 +76,10 @@ export interface Building {
 
 export interface PlayerState {
   resources: ResourceCounts;
-  commodities: CommodityCounts;
-  improvements: ProgressTrackCounts;
-  progressCards: ProgressCardType[];
-  victoryBonus: number;
+  commodities?: CommodityCounts;
+  improvements?: ProgressTrackCounts;
+  progressCards?: ProgressCardType[];
+  victoryBonus?: number;
 }
 
 export type PlayerMode = "human" | "bot";
@@ -99,11 +99,11 @@ export interface GameState {
   /** vertexId -> player id for Cities & Knights */
   knights: Record<string, string>;
   /** vertexId -> active knight flag */
-  activeKnights: Record<string, boolean>;
-  barbarianPosition: number;
-  lastEventDie: "barbarian" | ProgressTrackKey | null;
-  progressDeck: ProgressCardType[];
-  progressDiscards: ProgressCardType[];
+  activeKnights?: Record<string, boolean>;
+  barbarianPosition?: number;
+  lastEventDie?: "barbarian" | ProgressTrackKey | null;
+  progressDeck?: ProgressCardType[];
+  progressDiscards?: ProgressCardType[];
   /** Tile id the bandit currently occupies. */
   banditTile: number;
   /** Setup phase bookkeeping. */

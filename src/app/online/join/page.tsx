@@ -32,7 +32,7 @@ export default function JoinGamePage() {
       const match = await getMatch(matchID);
       const themeId = match.setupData?.themeId ?? "classic";
       await joinMatch(matchID, name.trim() || "Nomad", themeId);
-      router.push(`/online/room/${matchID}`);
+      router.push(`/online/room?m=${matchID}`);
     } catch {
       setError("Game not found — check the code, or the room may be full.");
       setBusy(false);

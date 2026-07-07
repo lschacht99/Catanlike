@@ -12,6 +12,8 @@ export interface ResourceTheme {
    * otherwise procedural vector art is drawn in the tile color.
    */
   image?: string;
+  /** Bundled hex SVG asset path (relative to /public), used by HexBoardPlay. */
+  tileArt?: string;
   /** Prompt reserved for future AI-generated tile art. */
   tilePrompt?: string;
 }

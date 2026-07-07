@@ -91,6 +91,7 @@ export interface PlayerState {
   resources: ResourceCounts;
   devCards: DevCard[];
   knightsPlayed: number;
+  /** Cities & Knights extras (patched in lazily for legacy saves). */
   commodities?: CommodityCounts;
   improvements?: ProgressTrackCounts;
   progressCards?: ProgressCardType[];
@@ -107,8 +108,9 @@ export interface GameState {
   players: Record<string, PlayerState>;
   /** Display names, index = player id. */
   names: string[];
-  /** Alias used by newer board UI. */
+  /** Alias of names kept for newer UI components. */
   playerNames?: string[];
+  /** Rules variant this match was created with. */
   variant?: GameVariant;
   /** vertexId -> building */
   buildings: Record<string, Building>;

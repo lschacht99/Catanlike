@@ -111,13 +111,15 @@ export default function GameBoard({
     instruction = `Tap a ${theme.terms.settlement.toLowerCase()} to upgrade`;
   }
 
+  // The online board plays the base variant; knights stay off here.
   const placeable: Record<BuildableKind, boolean> = canAct && !inSetup
     ? {
         road: validRoadSpots(G, current, false).length > 0,
         settlement: validSettlementSpots(G, current, false).length > 0,
         city: validCitySpots(G, current).length > 0,
+        knight: false,
       }
-    : { road: false, settlement: false, city: false };
+    : { road: false, settlement: false, city: false, knight: false };
 
   function onVertexTap(id: string) {
     if (!canAct) return;

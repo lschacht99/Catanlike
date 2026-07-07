@@ -44,7 +44,7 @@ export default function CreateOnlineGamePage() {
     try {
       const matchID = await createMatch(numPlayers, board, themeId);
       await joinMatch(matchID, name.trim() || "Nomad", themeId);
-      router.push(`/online/room/${matchID}`);
+      router.push(`/online/room?m=${matchID}`);
     } catch {
       setError(
         "Could not reach the game server. Make sure it is running (npm run server).",

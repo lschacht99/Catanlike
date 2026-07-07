@@ -1,13 +1,6 @@
 import type { Game } from "boardgame.io";
 import type { Board, GameState, GameVariant, OnlineSetupData } from "@/types/game";
-import {
-  devDeck,
-  emptyCommodities,
-  emptyImprovements,
-  emptyResources,
-  PLAYER_NAMES,
-  PROGRESS_DECK,
-} from "./constants";
+import { devDeck, emptyResources, PLAYER_NAMES, PROGRESS_DECK } from "./constants";
 import { generateBoard } from "./generator";
 import { winner } from "./scoring";
 import {
@@ -23,6 +16,7 @@ import {
   moveBandit,
   placeRoad,
   placeSettlement,
+  playerTrade,
   playKnight,
   playMonopoly,
   playProgressCard,
@@ -60,12 +54,16 @@ export function initialState(
       ? names
       : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]);
   const desert = board.tiles.find((t) => t.resource === "desert");
+  const resolvedNames =
+    names && names.length === numPlayers
+      ? names
+      : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]);
   return {
     numPlayers,
     board,
     players,
-    names: finalNames,
-    playerNames: finalNames,
+    names: resolvedNames,
+    playerNames: resolvedNames,
     variant,
     buildings: {},
     roads: {},
@@ -126,6 +124,11 @@ const PHASES: Game<GameState>["phases"] = {
       playRoadBuilding,
       playYearOfPlenty,
       playMonopoly,
+      playerTrade,
+      buildKnight,
+      activateKnight,
+      improveCity,
+      playProgressCard,
       endTurn,
     },
     turn: {

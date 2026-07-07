@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { sanitizeGeneratedTheme } from "../../src/game/theme-generator/schema";
 import { JAPAN_CHERRY_BAMBOO_THEME } from "../../src/game/theme-generator/samples";
 

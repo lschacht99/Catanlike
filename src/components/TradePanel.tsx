@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { PlayerMode, ResourceCounts, ResourceKey } from "@/types/game";
+import type { ResourceCounts, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { BANK_TRADE_RATE, RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import Sheet from "./Sheet";
@@ -9,40 +9,13 @@ import Sheet from "./Sheet";
 interface TradePanelProps {
   theme: Theme;
   resources: ResourceCounts;
-  players?: Record<string, { resources: ResourceCounts }>;
-  currentPlayer?: string;
-  playerNames?: string[];
-  playerModes?: PlayerMode[];
   onTrade: (give: ResourceKey, receive: ResourceKey) => void;
-  onPlayerTrade?: (
-    targetPlayer: string,
-    give: ResourceKey,
-    giveAmount: number,
-    receive: ResourceKey,
-    receiveAmount: number,
-  ) => void;
   onClose: () => void;
 }
 
-type TradeMode = "bank" | "player";
-
-export default function TradePanel({
-  theme,
-  resources,
-  players = {},
-  currentPlayer = "0",
-  playerNames = [],
-  playerModes = [],
-  onTrade,
-  onPlayerTrade,
-  onClose,
-}: TradePanelProps) {
-  const [mode, setMode] = useState<TradeMode>("bank");
+export default function TradePanel({ theme, resources, onTrade, onClose }: TradePanelProps) {
   const [give, setGive] = useState<ResourceKey | null>(null);
   const [receive, setReceive] = useState<ResourceKey | null>(null);
-  const [targetPlayer, setTargetPlayer] = useState<string | null>(null);
-  const [giveAmount, setGiveAmount] = useState(1);
-  const [receiveAmount, setReceiveAmount] = useState(1);
 
   const rivals = Object.keys(players).filter((id) => id !== currentPlayer);
   const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
@@ -57,10 +30,7 @@ export default function TradePanel({
     give !== null &&
     receive !== null &&
     give !== receive &&
-    giveAmount > 0 &&
-    receiveAmount > 0 &&
-    resources[give] >= giveAmount &&
-    targetHand[receive] >= receiveAmount;
+    resources[give] >= BANK_TRADE_RATE;
 
   function rivalName(id: string): string {
     const base = playerNames[Number(id)] ?? `Player ${Number(id) + 1}`;

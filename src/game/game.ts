@@ -22,6 +22,7 @@ import {
   playProgressCard,
   playRoadBuilding,
   playYearOfPlenty,
+  playerTrade,
   rollDice,
 } from "./moves";
 
@@ -42,8 +43,16 @@ export function initialState(
       resources: emptyResources(),
       devCards: [],
       knightsPlayed: 0,
+      commodities: emptyCommodities(),
+      improvements: emptyImprovements(),
+      progressCards: [],
+      victoryBonus: 0,
     };
   }
+  const finalNames =
+    names && names.length === numPlayers
+      ? names
+      : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]);
   const desert = board.tiles.find((t) => t.resource === "desert");
   const resolvedNames =
     names && names.length === numPlayers
@@ -104,7 +113,12 @@ const PHASES: Game<GameState>["phases"] = {
       buildRoad,
       buildSettlement,
       buildCity,
+      buildKnight,
+      activateKnight,
+      improveCity,
+      playProgressCard,
       bankTrade,
+      playerTrade,
       buyDevCard,
       playKnight,
       playRoadBuilding,
@@ -118,8 +132,6 @@ const PHASES: Game<GameState>["phases"] = {
       endTurn,
     },
     turn: {
-      // The first placer also takes the first turn, regardless of where the
-      // setup snake left the play order.
       order: {
         first: () => 0,
         next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,
@@ -127,6 +139,7 @@ const PHASES: Game<GameState>["phases"] = {
       onBegin: ({ G }) => {
         G.hasRolled = false;
         G.lastRoll = null;
+        G.lastEventDie = null;
         G.mustMoveBandit = false;
         G.freeRoads = 0;
         G.playedDevCardThisTurn = false;

@@ -87,17 +87,18 @@ export const TRACK_COMMODITY: Record<ProgressTrackKey, CommodityKey> = {
 };
 
 export const PROGRESS_CARD_LABELS: Record<ProgressCardType, string> = {
-  roadworks: "Roadworks",
-  harvest: "Harvest",
-  oreRush: "Ore Rush",
-  merchant: "Merchant",
-  diplomat: "Diplomat",
-  invention: "Invention",
+  roadworks: "Roadworks", bridgeCrew: "Bridge Crew", trailSurvey: "Trail Survey",
+  harvest: "Harvest", irrigation: "Irrigation", oreRush: "Ore Rush",
+  merchant: "Merchant", marketDay: "Market Day", caravan: "Caravan", harborDeal: "Harbor Deal", storehouse: "Storehouse", guildFavor: "Guild Favor",
+  diplomat: "Diplomat", watchPatrol: "Watch Patrol", borderPost: "Border Post",
+  invention: "Invention", scribe: "Scribe", engineer: "Engineer",
 };
 
 export const PROGRESS_DECK: ProgressCardType[] = [
-  "roadworks", "roadworks", "harvest", "harvest", "oreRush", "oreRush",
-  "merchant", "merchant", "diplomat", "diplomat", "invention", "invention",
+  "roadworks", "bridgeCrew", "trailSurvey", "harvest", "irrigation", "oreRush",
+  "merchant", "marketDay", "caravan", "harborDeal", "storehouse", "guildFavor",
+  "diplomat", "watchPatrol", "borderPost", "invention", "scribe", "engineer",
+  "roadworks", "harvest", "merchant", "diplomat", "invention", "oreRush",
 ];
 
 export function emptyResources(): ResourceCounts {

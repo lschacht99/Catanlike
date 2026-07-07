@@ -12,6 +12,7 @@ import {
   PROGRESS_CARD_LABELS,
   PROGRESS_DECK,
   TRACK_COMMODITY,
+  COMMODITY_FROM_RESOURCE,
   totalResources,
 } from "./constants";
 import {
@@ -36,6 +37,7 @@ const TRACKS: ProgressTrackKey[] = ["trade", "politics", "science"];
 function ensureExpandedState(G: GameState): void {
   G.knights ??= {};
   G.activeKnights ??= {};
+  G.knightLevels ??= {};
   G.barbarianPosition ??= 0;
   G.lastEventDie ??= null;
   G.progressDeck ??= [...PROGRESS_DECK];
@@ -100,10 +102,18 @@ function distribute(G: GameState, roll: number): void {
     for (const tileId of vertex.tiles) {
       const resource = producing.get(tileId);
       if (!resource) continue;
-      const amount = building.city ? 2 : 1;
-      G.players[building.player].resources[resource] += amount;
       const gains = (G.lastGains[building.player] ??= {});
-      gains[resource] = (gains[resource] ?? 0) + amount;
+      if (building.city && G.variant === "cities-knights") {
+        G.players[building.player].resources[resource] += 1;
+        gains[resource] = (gains[resource] ?? 0) + 1;
+        const commodity = COMMODITY_FROM_RESOURCE[resource];
+        if (commodity) G.players[building.player].commodities![commodity] += 1;
+        else { G.players[building.player].resources[resource] += 1; gains[resource] = (gains[resource] ?? 0) + 1; }
+      } else {
+        const amount = building.city ? 2 : 1;
+        G.players[building.player].resources[resource] += amount;
+        gains[resource] = (gains[resource] ?? 0) + amount;
+      }
     }
   }
 }
@@ -154,9 +164,7 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
       G.barbarianPosition = Math.min(7, (G.barbarianPosition ?? 0) + 1);
       log(G, `Raiders advanced to ${G.barbarianPosition}/7.`);
       if (G.barbarianPosition >= 7) {
-        for (const id of Object.keys(G.activeKnights ?? {})) G.activeKnights[id] = false;
-        G.barbarianPosition = 0;
-        log(G, "Raiders arrived. Active scouts return to camp.");
+        resolveBarbarian(G);
       }
     } else {
       const track = TRACKS[event - 4];
@@ -238,6 +246,7 @@ export const buildKnight: Move<GameState> = ({ G, playerID }, vertexId: string) 
   pay(G.players[player].resources, BUILD_COSTS.knight);
   G.knights[vertexId] = player;
   G.activeKnights[vertexId] = false;
+  G.knightLevels![vertexId] = 1;
   log(G, `${name(G, player)} trained an inactive scout.`);
 };
 
@@ -253,6 +262,45 @@ export const activateKnight: Move<GameState> = ({ G, playerID }, vertexId?: stri
   G.activeKnights[id] = true;
   log(G, `${name(G, player)} activated a scout.`);
 };
+
+export const upgradeKnight: Move<GameState> = ({ G, playerID }, vertexId: string) => {
+  ensureExpandedState(G);
+  const player = playerID!;
+  if (G.variant !== "cities-knights" || !requireRolled(G)) return INVALID_MOVE;
+  if (G.knights[vertexId] !== player) return INVALID_MOVE;
+  const current = G.knightLevels?.[vertexId] ?? 1;
+  if (current >= 3 || G.players[player].resources.ore < current || G.players[player].resources.wool < 1) return INVALID_MOVE;
+  G.players[player].resources.ore -= current;
+  G.players[player].resources.wool -= 1;
+  G.knightLevels![vertexId] = current + 1;
+  G.activeKnights![vertexId] = false;
+  log(G, `${name(G, player)} upgraded a scout to strength ${current + 1}.`);
+};
+
+export function resolveBarbarian(G: GameState): void {
+  ensureExpandedState(G);
+  const activeByPlayer: Record<string, number> = {};
+  for (const [id, owner] of Object.entries(G.knights ?? {})) if (G.activeKnights?.[id]) activeByPlayer[owner] = (activeByPlayer[owner] ?? 0) + (G.knightLevels?.[id] ?? 1);
+  const defense = Object.values(activeByPlayer).reduce((a, b) => a + b, 0);
+  const cities = Object.values(G.buildings).filter((b) => b.city).length;
+  if (defense >= cities) {
+    const best = Math.max(0, ...Object.values(activeByPlayer));
+    for (const [player, strength] of Object.entries(activeByPlayer)) if (strength === best && best > 0) G.players[player].victoryBonus = (G.players[player].victoryBonus ?? 0) + 1;
+    log(G, "Raiders were repelled. Strong defenders gained renown.");
+  } else {
+    for (const [player, state] of Object.entries(G.players)) {
+      const hasCity = Object.values(G.buildings).some((b) => b.player === player && b.city);
+      if (hasCity && !(activeByPlayer[player] > 0)) {
+        const city = Object.entries(G.buildings).find(([, b]) => b.player === player && b.city)?.[0];
+        if (city) G.buildings[city].city = false;
+        state.victoryBonus = Math.max(0, (state.victoryBonus ?? 0) - 1);
+      }
+    }
+    log(G, "Raiders broke through. Unprotected cities were reduced.");
+  }
+  for (const id of Object.keys(G.activeKnights ?? {})) G.activeKnights![id] = false;
+  G.barbarianPosition = 0;
+}
 
 export const improveCity: Move<GameState> = ({ G, playerID }, track: ProgressTrackKey) => {
   ensureExpandedState(G);
@@ -281,12 +329,12 @@ export const playProgressCard: Move<GameState> = ({ G, playerID }, card: Progres
   if (index < 0) return INVALID_MOVE;
   hand.splice(index, 1);
   G.progressDiscards.push(card);
-  if (card === "roadworks") { G.players[player].resources.wood += 1; G.players[player].resources.brick += 1; }
-  else if (card === "harvest") { G.players[player].resources.grain += 1; G.players[player].resources.wool += 1; }
+  if (["roadworks", "bridgeCrew", "trailSurvey"].includes(card)) { G.players[player].resources.wood += 1; G.players[player].resources.brick += 1; }
+  else if (["harvest", "irrigation"].includes(card)) { G.players[player].resources.grain += 1; G.players[player].resources.wool += 1; }
   else if (card === "oreRush") G.players[player].resources.ore += 2;
-  else if (card === "merchant") { G.players[player].commodities.coin += 1; G.players[player].commodities.cloth += 1; }
-  else if (card === "diplomat") { G.players[player].resources.wood += 1; G.players[player].resources.brick += 1; }
-  else if (card === "invention") { G.players[player].resources.grain += 1; G.players[player].commodities.book += 1; }
+  else if (["merchant", "marketDay", "caravan", "harborDeal", "storehouse", "guildFavor"].includes(card)) { G.players[player].commodities!.coin += 1; G.players[player].commodities!.cloth += 1; }
+  else if (["diplomat", "watchPatrol", "borderPost"].includes(card)) { G.players[player].resources.wood += 1; G.players[player].resources.brick += 1; }
+  else if (["invention", "scribe", "engineer"].includes(card)) { G.players[player].resources.grain += 1; G.players[player].commodities!.book += 1; }
   log(G, `${name(G, player)} played ${PROGRESS_CARD_LABELS[card]}.`);
 };
 

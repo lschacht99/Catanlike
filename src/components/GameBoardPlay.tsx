@@ -35,6 +35,9 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
+import { evaluateBotTrade } from "@/game/trade-ai";
+import { loadGameConfig } from "@/lib/storage";
+import { saveSnapshot } from "@/lib/save-game";
 import HexBoardPlay from "./HexBoardPlay";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
@@ -74,6 +77,8 @@ export default function GameBoardPlay({
   const [showTrade, setShowTrade] = useState(false);
   const [diceFlash, setDiceFlash] = useState<[number, number] | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [privacyGate, setPrivacyGate] = useState(true);
+  const [tradeNotice, setTradeNotice] = useState<string | null>(null);
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
@@ -99,6 +104,13 @@ export default function GameBoardPlay({
     }
     setPendingAction({ title, body, run });
   }
+
+  useEffect(() => {
+    const config = loadGameConfig();
+    if (config) saveSnapshot({ config, state: { G, ctx: { currentPlayer: ctx.currentPlayer, phase: ctx.phase, turn: ctx.turn, playOrder: ctx.playOrder, playOrderPos: ctx.playOrderPos } } });
+  }, [G, ctx.currentPlayer, ctx.phase, ctx.turn, ctx.playOrder, ctx.playOrderPos]);
+
+  useEffect(() => { setPrivacyGate(playerModes[Number(current)] !== "bot"); }, [current, playerModes]);
 
   useEffect(() => {
     if (!G.lastRoll) return;
@@ -206,7 +218,7 @@ export default function GameBoardPlay({
   }, [G, boardMoves, ctx.phase, current, currentIsCpu, gameover, inSetup, moves, variant]);
 
   function onVertexTap(id: string) {
-    if (currentIsCpu) return;
+    if (currentIsCpu || privacyGate) return;
     if (inSetup) ask("Confirm settlement", "Place your settlement on this corner.", () => moves.placeSettlement(id));
     else if (buildMode === "settlement") {
       ask("Build settlement", "Spend wood, brick, grain, and wool.", () => moves.buildSettlement(id));
@@ -221,7 +233,7 @@ export default function GameBoardPlay({
   }
 
   function onEdgeTap(id: string) {
-    if (currentIsCpu) return;
+    if (currentIsCpu || privacyGate) return;
     if (inSetup) ask("Confirm route", "Place your starting route next to the settlement.", () => moves.placeRoad(id));
     else if (buildMode === "road") {
       ask("Build route", "Spend 1 wood and 1 brick.", () => moves.buildRoad(id));
@@ -230,7 +242,7 @@ export default function GameBoardPlay({
   }
 
   function onTileTap(id: number) {
-    if (currentIsCpu) return;
+    if (currentIsCpu || privacyGate) return;
     if (G.mustMoveBandit) ask("Move bandit", "Move the bandit to this tile and steal if possible.", () => moves.moveBandit(id));
   }
 
@@ -315,19 +327,19 @@ export default function GameBoardPlay({
             <div className="mt-2"><BuildMenu theme={theme} resources={resources} pieces={pieces} placeable={placeable} activeMode={buildMode} onPick={(kind) => setBuildMode(kind)} includeKnights={variant === "cities-knights"} /></div>
             {variant === "cities-knights" && (
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <button disabled={currentIsCpu || !G.hasRolled || !ownInactiveKnight || resources.grain < 1 || !!gameover} onClick={() => ask("Activate knight", "Spend 1 grain. Active knights defend against raiders.", () => boardMoves.activateKnight?.(ownInactiveKnight))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">Activate knight</button>
+                <button disabled={privacyGate || currentIsCpu || !G.hasRolled || !ownInactiveKnight || resources.grain < 1 || !!gameover} onClick={() => ask("Activate knight", "Spend 1 grain. Active knights defend against raiders.", () => boardMoves.activateKnight?.(ownInactiveKnight))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">Activate knight</button>
                 {TRACK_KEYS_ORDERED.map((track) => {
                   const cost = (improvements[track] ?? 0) + 1;
                   const commodity = TRACK_COMMODITY[track];
-                  return <button key={track} disabled={currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
+                  return <button key={track} disabled={privacyGate || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
                 })}
-                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
+                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
               </div>
             )}
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button disabled={currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
-              <button disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
-              <button disabled={currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
+              <button disabled={privacyGate || currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
+              <button disabled={privacyGate || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
+              <button disabled={privacyGate || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
             </div>
           </>
         )}
@@ -342,7 +354,21 @@ export default function GameBoardPlay({
           playerNames={names}
           playerModes={playerModes}
           onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade 4 ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
-          onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => { setShowTrade(false); ask("Confirm player trade", `Give ${giveAmount} ${give} and receive ${receiveAmount} ${receive}.`, () => boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount)); }}
+          onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => {
+            setShowTrade(false);
+            const offer = { proposer: current, target, give, giveAmount, receive, receiveAmount };
+            if (playerModes[Number(target)] === "bot") {
+              const decision = evaluateBotTrade(G, offer);
+              setTradeNotice(decision.reason);
+              if (decision.accepted) boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount);
+              return;
+            }
+            setPendingAction({
+              title: `Pass to ${names[Number(target)]}`,
+              body: `${names[Number(current)]} offers ${giveAmount} ${give} for ${receiveAmount} ${receive}. Only ${names[Number(target)]} should accept or refuse.`,
+              run: () => setPendingAction({ title: "Accept trade?", body: "Review the public offer. Your exact resources remain private until you choose.", run: () => boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount) }),
+            });
+          }}
           onClose={() => setShowTrade(false)}
         />
       )}
@@ -358,6 +384,21 @@ export default function GameBoardPlay({
             </div>
           </div>
         </div>
+      )}
+
+      {privacyGate && !gameover && !currentIsCpu && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950 p-6 text-center text-white">
+          <div className="max-w-sm rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl">
+            <p className="text-4xl">🔒</p>
+            <h2 className="mt-3 text-xl font-black">Pass device to {names[Number(current)]}</h2>
+            <p className="mt-2 text-sm leading-6 text-white/65">Private resources and cards are hidden between turns. Tap only when this player is ready.</p>
+            <button onClick={() => setPrivacyGate(false)} className="mt-5 w-full rounded-xl bg-yellow-500 py-3 font-black text-slate-900">Show my turn</button>
+          </div>
+        </div>
+      )}
+
+      {tradeNotice && (
+        <div className="fixed inset-x-4 top-16 z-[65] rounded-2xl bg-slate-900 p-3 text-center text-sm font-bold text-white shadow-2xl" onClick={() => setTradeNotice(null)}>{tradeNotice}</div>
       )}
 
       {gameover && (

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { Board, PlayerMode } from "@/types/game";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { Board, GameVariant, PlayerMode } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
@@ -22,14 +22,17 @@ import {
 
 const DEFAULT_NAMES = ["Player 1", "Player 2", "Player 3", "Player 4"];
 
-export default function NewGamePage() {
+function NewGamePageInner() {
   const router = useRouter();
+  const search = useSearchParams();
   const [numPlayers, setNumPlayers] = useState(3);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   const [board, setBoard] = useState<Board | null>(null);
   const [playerModes, setPlayerModes] = useState<PlayerMode[]>(["human", "human", "bot", "bot"]);
+  const variant = (search.get("variant") === "cities-knights" ? "cities-knights" : "base") as GameVariant;
+  const localMultiplayer = search.get("multiplayer") === "local";
 
   useEffect(() => {
     setThemes(allThemes());
@@ -58,14 +61,16 @@ export default function NewGamePage() {
       board,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
       playerModes: playerModes.slice(0, numPlayers),
-      variant: "base",
+      variant,
     });
     router.push("/game");
   }
 
   return (
     <Shell>
-      <TopBar title="New Journey" />
+      <TopBar title={variant === "cities-knights" ? "Cities & Knights" : localMultiplayer ? "Local Multiplayer" : "New Journey"} />
+
+      {localMultiplayer && <Card className="mb-4 text-sm leading-6 text-ink-soft"><b className="text-ink">Local multiplayer:</b> pass-and-play privacy screens hide each hand between turns. Online multiplayer requires running the included server and is not faked on GitHub Pages.</Card>}
 
       <Card className="mb-4">
         <SectionLabel>Players</SectionLabel>
@@ -150,4 +155,9 @@ export default function NewGamePage() {
       </PrimaryButton>
     </Shell>
   );
+}
+
+
+export default function NewGamePage() {
+  return <Suspense fallback={<Shell><TopBar title="New Journey" /></Shell>}><NewGamePageInner /></Suspense>;
 }

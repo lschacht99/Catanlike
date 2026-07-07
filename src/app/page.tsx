@@ -1,69 +1,43 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  BottomNav,
-  HamsaLogo,
-  PrimaryLink,
-  SecondaryLink,
-  Shell,
-} from "@/components/ui";
+import { deleteSnapshot, loadSnapshot } from "@/lib/save-game";
+import { saveGameConfig } from "@/lib/storage";
+import { BottomNav, HamsaLogo, PrimaryLink, Shell } from "@/components/ui";
+
+const cards = [
+  { href: "/new?variant=base", title: "New Standard Game", img: "/assets/home/standard.svg", text: "Classic build, trade, and race to 10." },
+  { href: "/new?variant=cities-knights", title: "New Cities & Knights Game", img: "/assets/home/cities-knights.svg", text: "Commodities, city tracks, scouts, and raiders." },
+  { href: "/new?multiplayer=local", title: "Multiplayer", img: "/assets/home/multiplayer.svg", text: "Local pass-and-play. Online needs server setup." },
+  { href: "/forge", title: "Custom Map / Theme", img: "/assets/home/custom.svg", text: "Tune the board and visual style." },
+  { href: "/how-to-play", title: "Rules / How to Play", img: "/assets/home/rules.svg", text: "Short mobile-friendly rules." },
+];
+
+function fallback(e: React.SyntheticEvent<HTMLImageElement>) { e.currentTarget.src = "/assets/home/fallback.svg"; }
 
 export default function HomePage() {
+  const [hasSave, setHasSave] = useState(false);
+  useEffect(() => setHasSave(!!loadSnapshot()), []);
+  function resume() { const snap = loadSnapshot(); if (snap) saveGameConfig(snap.config); }
   return (
     <>
-      <Shell withNav className="justify-center">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/profile"
-            aria-label="Settings"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-cream text-ink shadow-card"
-          >
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="10" cy="10" r="2.6" />
-              <path d="M10 2.5v2m0 11v2M2.5 10h2m11 0h2M4.8 4.8l1.4 1.4m7.6 7.6 1.4 1.4m0-10.4-1.4 1.4M6.2 13.8l-1.4 1.4" strokeLinecap="round" />
-            </svg>
-          </Link>
-          <HamsaLogo size={34} />
-        </div>
-
-        <div className="mt-6 text-center">
-          <HamsaLogo size={72} className="mx-auto" />
-          <h1 className="mt-4 font-display text-[44px] font-bold leading-none tracking-wide text-ink">
-            HAMSA
-          </h1>
-          <p className="mt-1 text-lg font-semibold uppercase tracking-[0.5em] text-rust">
-            Nomads
-          </p>
-          <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.35em] text-ink-soft">
-            Build · Trade · Explore
-          </p>
-        </div>
-
-        <div className="mx-auto my-7 h-px w-24 bg-rust/40" />
-
-        <div className="text-center">
-          <h2 className="font-display text-2xl text-ink">
-            A journey <span className="italic text-rust">you build</span>
-          </h2>
-          <p className="mx-auto mt-2 max-w-[260px] text-sm leading-relaxed text-ink-soft">
-            Settle new lands, trade resources, and build your nomadic legacy.
-          </p>
-        </div>
-
-        <div className="mt-8 space-y-3">
-          <PrimaryLink href="/new">Play</PrimaryLink>
-          <div className="grid grid-cols-2 gap-3">
-            <SecondaryLink href="/online/create">Create Game</SecondaryLink>
-            <SecondaryLink href="/online/join">Join Game</SecondaryLink>
+      <Shell withNav className="justify-start">
+        <div className="flex items-center justify-between"><Link href="/profile" aria-label="Settings" className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-cream text-ink shadow-card">⚙</Link><HamsaLogo size={34} /></div>
+        <section className="mt-5 overflow-hidden rounded-[2rem] border border-line bg-cream shadow-card">
+          <img src="/assets/home/hero.svg" onError={fallback} alt="Illustrated hex board" className="aspect-[16/9] w-full bg-parchment object-cover" loading="eager" />
+          <div className="p-5 text-center"><HamsaLogo size={54} className="mx-auto" /><h1 className="mt-2 font-display text-4xl font-bold text-ink">HAMSA Nomads</h1><p className="mt-2 text-sm text-ink-soft">An original hex resource-trading game. Build, trade, explore.</p></div>
+        </section>
+        <div className="mt-4 grid gap-3">
+          {hasSave && <Link onClick={resume} href="/game" className="rounded-2xl bg-ink px-4 py-4 text-center font-black uppercase tracking-[0.12em] text-cream">Resume Game</Link>}
+          <PrimaryLink href="/new">Quick New Game</PrimaryLink>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {cards.map((c) => <Link key={c.title} href={c.href} className="grid grid-cols-[88px_1fr] gap-3 rounded-2xl border border-line bg-cream p-2 shadow-card"><img src={c.img} onError={fallback} alt="" className="aspect-square rounded-xl bg-parchment object-cover" loading="lazy" /><span><b className="block text-sm text-ink">{c.title}</b><small className="mt-1 block text-xs leading-5 text-ink-soft">{c.text}</small></span></Link>)}
           </div>
-          <SecondaryLink href="/how-to-play">How to Play</SecondaryLink>
+          {hasSave && <button onClick={() => { deleteSnapshot(); setHasSave(false); }} className="rounded-full border border-line bg-cream py-3 text-sm font-bold text-rust">Delete Saved Game</button>}
         </div>
-
-        <p className="mt-8 text-center text-[10px] leading-relaxed text-ink-faint">
-          An original game inspired by classic hex resource-trading mechanics.
-          Not affiliated with any commercial board game.
-        </p>
-      </Shell>
-      <BottomNav active="/" />
+        <p className="mt-5 text-center text-[10px] leading-relaxed text-ink-faint">Online multiplayer is available only with the included boardgame.io server; static GitHub Pages supports local play.</p>
+      </Shell><BottomNav active="/" />
     </>
   );
 }

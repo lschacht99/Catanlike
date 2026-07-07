@@ -12,12 +12,9 @@ export type ProgressTrackKey = (typeof PROGRESS_TRACK_KEYS)[number];
 export type ProgressTrackCounts = Record<ProgressTrackKey, number>;
 
 export type ProgressCardType =
-  | "roadworks"
-  | "harvest"
-  | "oreRush"
-  | "merchant"
-  | "diplomat"
-  | "invention";
+  | "roadworks" | "bridgeCrew" | "trailSurvey" | "harvest" | "irrigation" | "oreRush"
+  | "merchant" | "marketDay" | "caravan" | "harborDeal" | "storehouse" | "guildFavor"
+  | "diplomat" | "watchPatrol" | "borderPost" | "invention" | "scribe" | "engineer";
 
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
@@ -120,6 +117,8 @@ export interface GameState {
   knights: Record<string, string>;
   /** vertexId -> active knight flag */
   activeKnights?: Record<string, boolean>;
+  /** vertexId -> knight strength (1-3). */
+  knightLevels?: Record<string, number>;
   barbarianPosition?: number;
   lastEventDie?: "barbarian" | ProgressTrackKey | null;
   progressDeck?: ProgressCardType[];

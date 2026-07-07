@@ -45,6 +45,7 @@ export default function TradePanel({
   const rivals = Object.keys(players).filter((id) => id !== currentPlayer);
   const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
   const targetHand = targetPlayer ? players[targetPlayer]?.resources : undefined;
+  const targetCardCount = targetHand ? Object.values(targetHand).reduce((a, b) => a + b, 0) : 0;
 
   const canBankConfirm =
     give !== null && receive !== null && give !== receive && resources[give] >= BANK_TRADE_RATE;
@@ -52,12 +53,10 @@ export default function TradePanel({
   const canPlayerConfirm =
     !!onPlayerTrade &&
     !!targetPlayer &&
-    !!targetHand &&
     give !== null &&
     receive !== null &&
     give !== receive &&
     resources[give] >= giveAmount &&
-    targetHand[receive] >= receiveAmount &&
     giveAmount >= 1 &&
     receiveAmount >= 1;
 
@@ -245,17 +244,13 @@ export default function TradePanel({
             }}
             disabledFor={(r) => r === give}
           />
-          {receive && targetHand && (
-            <div className="flex items-center justify-between rounded-2xl border border-line bg-cream px-3 py-2">
-              <span className="text-xs font-semibold text-ink-soft">
-                Amount (they hold {targetHand[receive]})
-              </span>
-              <Stepper
-                value={receiveAmount}
-                onChange={setReceiveAmount}
-                max={targetHand[receive]}
-                label="receive amount"
-              />
+          {receive && targetPlayer && (
+            <div className="rounded-2xl border border-line bg-cream px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-ink-soft">Request amount</span>
+                <Stepper value={receiveAmount} onChange={setReceiveAmount} max={9} label="receive amount" />
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-ink-faint">Private: exact rival resources are hidden. Public cards: {targetCardCount}.</p>
             </div>
           )}
           <button

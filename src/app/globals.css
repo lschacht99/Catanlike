@@ -203,3 +203,10 @@ body {
 @keyframes producePulse { 50% { transform: translate3d(calc(var(--x) - 38px), calc(var(--y) - 43px), calc(var(--h) + 18px)); filter: saturate(1.4) brightness(1.12); } }
 @keyframes sheepBob { 50% { translate: 0 -5px; } }
 @media (min-width: 760px) { .scene3d { min-height: 68vh; } .die { width: 64px; height: 64px; } }
+
+@media (orientation: landscape) and (max-height: 700px) {
+  .game-shell { flex-direction: row; }
+  .game-shell > header { width: 15rem; max-width: 24vw; overflow-y: auto; }
+  .game-shell > div:nth-of-type(3) { order: 2; width: min(25rem, 34vw); height: 100dvh; overflow-y: auto; border-left: 1px solid rgba(255,255,255,.1); border-top: 0; border-radius: 1.5rem 0 0 1.5rem; }
+  .game-shell > div:nth-of-type(2) { order: 1; }
+}

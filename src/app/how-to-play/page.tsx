@@ -25,7 +25,17 @@ const SECTIONS = [
   {
     icon: "🐪",
     title: "Trade",
-    body: "Trade 4 identical resources to the market gate for any 1 resource. Choose wisely — every theme names the resources differently, but the exchange never changes.",
+    body: "Trade 4 identical resources with the market, or propose player trades. Exact rival resources and private cards stay hidden; pass-and-play asks the receiver before accepting.",
+  },
+  {
+    icon: "👥",
+    title: "Multiplayer",
+    body: "Local multiplayer uses named players on one device with a privacy screen between turns. True online play requires running the server, so static Pages does not pretend to host rooms.",
+  },
+  {
+    icon: "🏙️",
+    title: "Cities & Knights Mode",
+    body: "Cities can make commodities, upgrade trade/politics/science tracks, train scouts, draw progress cards, and defend against raider attacks.",
   },
   {
     icon: "🃏",

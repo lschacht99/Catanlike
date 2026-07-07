@@ -13,11 +13,11 @@ import { saveGameConfig } from "@/lib/storage";
 export default function StudioPage() {
   const router = useRouter();
   const [themes, setThemes] = useState<Theme[]>([]);
-  const [themeId, setThemeId] = useState("classic");
+  const [themeId, setThemeId] = useState("hamsa");
   const [numPlayers, setNumPlayers] = useState(4);
   const [variant, setVariant] = useState<GameVariant>("base");
   const [playerModes, setPlayerModes] = useState<PlayerMode[]>(["human", "human", "bot", "bot"]);
-  const [playerNames, setPlayerNames] = useState<string[]>(["Leah", "Moshe", "Amber", "Green"]);
+  const [playerNames, setPlayerNames] = useState<string[]>(["Leah", "Moshe", "Scout", "Guide"]);
 
   useEffect(() => {
     setThemes(allThemes());
@@ -56,7 +56,7 @@ export default function StudioPage() {
   function pickSolo() {
     setNumPlayers(4);
     setPlayerModes(["human", "bot", "bot", "bot"]);
-    setPlayerNames(["You", "Red CPU", "Blue CPU", "Green CPU"]);
+    setPlayerNames(["You", "North CPU", "Desert CPU", "Sea CPU"]);
   }
 
   return (

@@ -1,17 +1,26 @@
 import type { Game } from "boardgame.io";
 import type { Board, GameState, GameVariant } from "@/types/game";
-import { emptyResources, PLAYER_NAMES } from "./constants";
+import {
+  emptyCommodities,
+  emptyImprovements,
+  emptyResources,
+  PLAYER_NAMES,
+  PROGRESS_DECK,
+} from "./constants";
 import { winner } from "./scoring";
 import {
+  activateKnight,
   bankTrade,
   buildCity,
   buildKnight,
   buildRoad,
   buildSettlement,
   endTurn,
+  improveCity,
   moveBandit,
   placeRoad,
   placeSettlement,
+  playProgressCard,
   playerTrade,
   rollDice,
 } from "./moves";
@@ -27,7 +36,13 @@ function initialState(
 ): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
-    players[String(i)] = { resources: emptyResources() };
+    players[String(i)] = {
+      resources: emptyResources(),
+      commodities: emptyCommodities(),
+      improvements: emptyImprovements(),
+      progressCards: [],
+      victoryBonus: 0,
+    };
   }
   const desert = board.tiles.find((t) => t.resource === "desert");
   return {
@@ -39,6 +54,11 @@ function initialState(
     buildings: {},
     roads: {},
     knights: {},
+    activeKnights: {},
+    barbarianPosition: 0,
+    lastEventDie: null,
+    progressDeck: [...PROGRESS_DECK],
+    progressDiscards: [],
     banditTile: desert ? desert.id : -1,
     setupStep: 0,
     pendingSetupSettlement: null,
@@ -85,6 +105,9 @@ export function createHexIslesGame(
           buildSettlement,
           buildCity,
           buildKnight,
+          activateKnight,
+          improveCity,
+          playProgressCard,
           bankTrade,
           playerTrade,
           endTurn,
@@ -93,6 +116,7 @@ export function createHexIslesGame(
           onBegin: ({ G }) => {
             G.hasRolled = false;
             G.lastRoll = null;
+            G.lastEventDie = null;
             G.mustMoveBandit = false;
           },
         },

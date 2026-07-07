@@ -3,6 +3,22 @@
 export const RESOURCE_KEYS = ["wood", "brick", "grain", "wool", "ore"] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
 
+export const COMMODITY_KEYS = ["coin", "cloth", "book"] as const;
+export type CommodityKey = (typeof COMMODITY_KEYS)[number];
+export type CommodityCounts = Record<CommodityKey, number>;
+
+export const PROGRESS_TRACK_KEYS = ["trade", "politics", "science"] as const;
+export type ProgressTrackKey = (typeof PROGRESS_TRACK_KEYS)[number];
+export type ProgressTrackCounts = Record<ProgressTrackKey, number>;
+
+export type ProgressCardType =
+  | "roadworks"
+  | "harvest"
+  | "oreRush"
+  | "merchant"
+  | "diplomat"
+  | "invention";
+
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
 
@@ -60,6 +76,10 @@ export interface Building {
 
 export interface PlayerState {
   resources: ResourceCounts;
+  commodities: CommodityCounts;
+  improvements: ProgressTrackCounts;
+  progressCards: ProgressCardType[];
+  victoryBonus: number;
 }
 
 export type PlayerMode = "human" | "bot";
@@ -76,8 +96,14 @@ export interface GameState {
   buildings: Record<string, Building>;
   /** edgeId -> player id */
   roads: Record<string, string>;
-  /** vertexId -> player id for Cities & Knights lite */
+  /** vertexId -> player id for Cities & Knights */
   knights: Record<string, string>;
+  /** vertexId -> active knight flag */
+  activeKnights: Record<string, boolean>;
+  barbarianPosition: number;
+  lastEventDie: "barbarian" | ProgressTrackKey | null;
+  progressDeck: ProgressCardType[];
+  progressDiscards: ProgressCardType[];
   /** Tile id the bandit currently occupies. */
   banditTile: number;
   /** Setup phase bookkeeping. */

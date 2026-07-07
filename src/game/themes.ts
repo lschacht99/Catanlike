@@ -33,8 +33,8 @@ export const CLASSIC_THEME: Theme = {
     tilePrompt: "dry sandy badlands hex tile, board game style",
   },
   bandit: { label: "Bandit", icon: "🗿" },
-  terms: { road: "Road", settlement: "Village", city: "City", knight: "Knight" },
-  board: { sea: "#1e6091" },
+  terms: { road: "Road", settlement: "Village", city: "City" },
+  board: { sea: "#e9decb" },
 };
 
 export const JAPAN_THEME: Theme = {
@@ -67,8 +67,8 @@ export const JAPAN_THEME: Theme = {
     tilePrompt: "minimal Japanese zen garden hex tile",
   },
   bandit: { label: "Ronin", icon: "👺" },
-  terms: { road: "Path", settlement: "Village", city: "Castle", knight: "Samurai" },
-  board: { sea: "#264653" },
+  terms: { road: "Path", settlement: "Village", city: "Castle" },
+  board: { sea: "#e5dccb" },
 };
 
 export const BUILTIN_THEMES: Theme[] = [

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GameState } from "@/types/game";
 import { emptyResources } from "../constants";
-import { randomBoard } from "../generator";
 import { buildGeometry } from "../geometry";
 import {
   canAfford,
@@ -12,27 +10,9 @@ import {
   validSettlementSpots,
 } from "../rules";
 import { setupOrder } from "../game";
+import { makeState } from "./helpers";
 import { victoryPoints, winner } from "../scoring";
 
-function makeState(numPlayers = 3): GameState {
-  const board = randomBoard(() => 0.42);
-  const players: GameState["players"] = {};
-  for (let i = 0; i < numPlayers; i++) players[String(i)] = { resources: emptyResources() };
-  return {
-    numPlayers,
-    board,
-    players,
-    buildings: {},
-    roads: {},
-    banditTile: board.tiles.find((t) => t.resource === "desert")!.id,
-    setupStep: 0,
-    pendingSetupSettlement: null,
-    hasRolled: true,
-    lastRoll: [3, 4],
-    mustMoveBandit: false,
-    log: [],
-  };
-}
 
 describe("build costs", () => {
   it("validates each build cost exactly", () => {

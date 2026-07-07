@@ -18,14 +18,13 @@ export default function PlayerHand({
         return (
           <div
             key={key}
-            className="flex flex-col items-center rounded-xl border border-white/10 px-1 py-1.5"
-            style={{ background: `${style.color}26` }}
+            className="flex flex-col items-center rounded-xl border border-line bg-cream px-1 py-1.5 shadow-card"
           >
             <span className="text-lg leading-none">{style.icon}</span>
-            <span className="mt-1 text-[10px] leading-tight text-white/70">
+            <span className="mt-0.5 max-w-full truncate text-[9px] font-semibold uppercase tracking-wide text-ink-soft">
               {style.label}
             </span>
-            <span className="text-base font-bold text-white">{resources[key]}</span>
+            <span className="text-base font-bold text-ink">{resources[key]}</span>
           </div>
         );
       })}

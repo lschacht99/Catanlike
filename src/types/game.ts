@@ -22,6 +22,19 @@ export type ProgressCardType =
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
 
+export type DevCardType =
+  | "knight"
+  | "victory"
+  | "roadBuilding"
+  | "yearOfPlenty"
+  | "monopoly";
+
+export interface DevCard {
+  type: DevCardType;
+  /** ctx.turn when bought — a card cannot be played the turn it was bought. */
+  turnBought: number;
+}
+
 export interface Tile {
   id: number;
   /** Axial hex coordinates. */
@@ -76,10 +89,8 @@ export interface Building {
 
 export interface PlayerState {
   resources: ResourceCounts;
-  commodities?: CommodityCounts;
-  improvements?: ProgressTrackCounts;
-  progressCards?: ProgressCardType[];
-  victoryBonus?: number;
+  devCards: DevCard[];
+  knightsPlayed: number;
 }
 
 export type PlayerMode = "human" | "bot";
@@ -90,8 +101,8 @@ export interface GameState {
   numPlayers: number;
   board: Board;
   players: Record<string, PlayerState>;
-  playerNames: string[];
-  variant: GameVariant;
+  /** Display names, index = player id. */
+  names: string[];
   /** vertexId -> building */
   buildings: Record<string, Building>;
   /** edgeId -> player id */
@@ -106,6 +117,11 @@ export interface GameState {
   progressDiscards?: ProgressCardType[];
   /** Tile id the bandit currently occupies. */
   banditTile: number;
+  /** Shuffled development card deck (draw from the end). */
+  devDeck: DevCardType[];
+  /** Bonus holders (2 VP each). */
+  largestArmyHolder: string | null;
+  longestRoadHolder: string | null;
   /** Setup phase bookkeeping. */
   setupStep: number;
   /** Vertex placed this setup turn; the setup road must touch it. */
@@ -113,17 +129,27 @@ export interface GameState {
   /** Play phase bookkeeping. */
   hasRolled: boolean;
   lastRoll: [number, number] | null;
+  /** Resources gained by each player on the last roll (for the roll-result sheet). */
+  lastGains: Record<string, Partial<ResourceCounts>>;
   mustMoveBandit: boolean;
-  /** Human-readable event feed. */
+  /** Free roads remaining from a Road Building card. */
+  freeRoads: number;
+  /** Only one development card may be played per turn. */
+  playedDevCardThisTurn: boolean;
+  /** Human-readable event feed (most recent last). */
   log: string[];
 }
 
-/** Saved in localStorage to configure the next game. */
+/** Saved in localStorage to configure the next local game. */
 export interface GameConfig {
   numPlayers: number;
   themeId: string;
   board: Board;
-  playerModes?: PlayerMode[];
   playerNames?: string[];
-  variant?: GameVariant;
+}
+
+/** setupData passed through the lobby when creating an online match. */
+export interface OnlineSetupData {
+  board: Board;
+  themeId: string;
 }

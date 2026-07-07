@@ -8,6 +8,15 @@ import { generateBoard, randomBoard, scoreBoard } from "@/game/generator";
 import { allThemes } from "@/game/themes";
 import { saveBoard } from "@/lib/storage";
 import HexBoard from "@/components/HexBoard";
+import {
+  Card,
+  Chip,
+  PrimaryButton,
+  SecondaryButton,
+  SectionLabel,
+  Shell,
+  TopBar,
+} from "@/components/ui";
 
 type BalanceMode = "fair" | "wild";
 
@@ -48,33 +57,27 @@ export default function ForgePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 py-6">
-      <header className="mb-4 flex items-center gap-3">
-        <Link href="/" className="rounded-lg bg-white/10 px-3 py-1.5 text-sm">←</Link>
-        <h1 className="text-xl font-bold">Map Forge</h1>
-      </header>
+    <Shell>
+      <TopBar title="Map Forge" />
 
-      <section className="mb-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">Theme preview</p>
+      <Card className="mb-4">
+        <SectionLabel>Theme preview</SectionLabel>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {themes.map((t) => (
-            <button
+            <Chip
               key={t.id}
+              selected={themeId === t.id}
               onClick={() => setThemeId(t.id)}
-              className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-semibold ${
-                themeId === t.id
-                  ? "border-yellow-400 bg-yellow-400/20 text-yellow-300"
-                  : "border-white/15 bg-white/5"
-              }`}
+              className="shrink-0"
             >
               {t.name}
-            </button>
+            </Chip>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="mb-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">Balance</p>
+      <Card className="mb-4">
+        <SectionLabel>Balance</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
           {(
             [
@@ -82,67 +85,59 @@ export default function ForgePage() {
               { id: "wild", label: "🎲 Wild", hint: "fully random" },
             ] as const
           ).map((m) => (
-            <button
+            <Chip
               key={m.id}
+              selected={balance === m.id}
               onClick={() => {
                 setBalance(m.id);
                 regenerate(m.id);
               }}
-              className={`rounded-xl border py-2.5 text-sm font-bold ${
-                balance === m.id
-                  ? "border-yellow-400 bg-yellow-400/20 text-yellow-300"
-                  : "border-white/15 bg-white/5"
-              }`}
             >
               {m.label}
-              <span className="block text-[10px] font-normal text-white/50">{m.hint}</span>
-            </button>
+              <span className={`block text-[10px] font-normal ${balance === m.id ? "text-cream/70" : "text-ink-faint"}`}>
+                {m.hint}
+              </span>
+            </Chip>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="mb-4 flex-1">
+      <Card className="mb-5">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Board</p>
+          <SectionLabel>Board</SectionLabel>
           {board && (
             <span
-              className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                board.score >= 80 ? "bg-emerald-500/20 text-emerald-300" : "bg-orange-500/20 text-orange-300"
+              className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                board.score >= 80 ? "bg-olive/15 text-olive" : "bg-rust/15 text-rust"
               }`}
             >
               balance {board.score}
             </span>
           )}
         </div>
-        <div className="overflow-hidden rounded-2xl border border-white/10">
+        <div className="overflow-hidden rounded-xl border border-line">
           {board && theme ? (
             <HexBoard board={board} theme={theme} className="aspect-square w-full" />
           ) : (
-            <div className="flex aspect-square items-center justify-center text-white/40">
+            <div className="flex aspect-square items-center justify-center text-ink-faint">
               Generating…
             </div>
           )}
         </div>
-      </section>
+      </Card>
 
       <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => regenerate()}
-          className="rounded-2xl bg-white/10 py-3.5 font-bold"
-        >
-          🔀 Regenerate
-        </button>
-        <button
-          onClick={save}
-          disabled={!board}
-          className="rounded-2xl bg-yellow-500 py-3.5 font-bold text-slate-900 disabled:opacity-40"
-        >
-          {savedFlash ? "✓ Saved!" : "💾 Save board"}
-        </button>
+        <SecondaryButton onClick={() => regenerate()}>Regenerate</SecondaryButton>
+        <PrimaryButton onClick={save} disabled={!board}>
+          {savedFlash ? "✓ Saved!" : "Save board"}
+        </PrimaryButton>
       </div>
-      <Link href="/boards" className="mt-3 text-center text-sm text-white/50 underline">
+      <Link
+        href="/collection"
+        className="mt-4 text-center text-sm text-ink-soft underline"
+      >
         View saved boards
       </Link>
-    </main>
+    </Shell>
   );
 }

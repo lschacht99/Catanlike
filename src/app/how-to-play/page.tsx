@@ -1,34 +1,64 @@
-import Link from "next/link";
-import HamsaPage from "@/components/HamsaPage";
+import { Card, Shell } from "@/components/ui";
+import { TopBarStatic } from "./topbar";
 
-const steps = [
-  ["Settle", "Place two camps and two routes during setup."],
-  ["Roll", "Roll dice to collect resources from matching hex numbers."],
-  ["Trade", "Trade with the bank or another seat."],
-  ["Build", "Build routes, camps, cities, and scouts."],
-  ["Cities", "Cities can create commodities in the advanced mode."],
-  ["Score", "Reach the victory point target first."],
+const SECTIONS = [
+  {
+    icon: "🎯",
+    title: "The Goal",
+    body: "Be the first to reach 10 legacy points. Villages are worth 1, cities 2, and the Longest Route and Largest Army banners 2 each. Some journey cards hide extra points.",
+  },
+  {
+    icon: "🗺️",
+    title: "Setting Out",
+    body: "In turn order (then reversed), each nomad places two villages with a road each. Your second village pays out one resource from each tile it touches.",
+  },
+  {
+    icon: "🎲",
+    title: "The Turns",
+    body: "Roll two dice. Every tile with that number pays its resource to villages (1) and cities (2) on its corners. Then build, trade, and play one journey card if you wish.",
+  },
+  {
+    icon: "🧱",
+    title: "Build",
+    body: "Roads connect your network. Villages must sit two crossings apart and touch your roads. Upgrade a village to a city for double harvests.",
+  },
+  {
+    icon: "🐪",
+    title: "Trade",
+    body: "Trade 4 identical resources to the market gate for any 1 resource. Choose wisely — every theme names the resources differently, but the exchange never changes.",
+  },
+  {
+    icon: "🃏",
+    title: "Journey Cards",
+    body: "Buy a card for grain + wool + ore. Knights move the bandit and count toward the Largest Army. Others grant free roads, resources, or hidden points. One card per turn, never the turn you bought it.",
+  },
+  {
+    icon: "👺",
+    title: "The Bandit",
+    body: "On a 7 nothing is harvested. The roller moves the bandit to any tile, blocking it, and steals a random card from a neighbor there.",
+  },
 ];
 
 export default function HowToPlayPage() {
   return (
-    <HamsaPage title="How to Play" kicker="Rules guide">
-      <div className="rounded-[2rem] border border-[#ead8bb] bg-white/55 p-5 shadow-sm">
-        <div className="space-y-3">
-          {steps.map(([title, body], index) => (
-            <div key={title} className="rounded-2xl border border-[#ead8bb] bg-[#fff9ec] p-4">
-              <div className="flex gap-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#17324d] text-xs font-bold text-[#fff6df]">{index + 1}</span>
-                <div>
-                  <h2 className="font-serif text-lg tracking-[0.08em]">{title}</h2>
-                  <p className="mt-1 text-sm leading-6 text-[#65513a]">{body}</p>
-                </div>
-              </div>
+    <Shell>
+      <TopBarStatic title="How to Play" />
+      <div className="space-y-3">
+        {SECTIONS.map((s) => (
+          <Card key={s.title} className="flex gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-parchment text-xl">
+              {s.icon}
+            </span>
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-ink">{s.title}</h2>
+              <p className="mt-1 text-sm leading-relaxed text-ink-soft">{s.body}</p>
             </div>
-          ))}
-        </div>
+          </Card>
+        ))}
       </div>
-      <Link href="/studio" className="mt-5 block rounded-full bg-[#17324d] px-6 py-4 text-center text-sm font-black uppercase tracking-[0.2em] text-[#fff6df]">Play</Link>
-    </HamsaPage>
+      <p className="mt-6 text-center text-[10px] text-ink-faint">
+        An original ruleset inspired by classic hex trading games.
+      </p>
+    </Shell>
   );
 }

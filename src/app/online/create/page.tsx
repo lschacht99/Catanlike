@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Board } from "@/types/game";
 import type { Theme } from "@/types/theme";
-import { PLAYER_COLORS } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
 import { allThemes } from "@/game/themes";
-import { saveGameConfig } from "@/lib/storage";
+import { createMatch, joinMatch } from "@/lib/online";
+import { loadProfile } from "@/lib/profile";
 import HexBoard from "@/components/HexBoard";
 import {
   Card,
@@ -19,71 +19,67 @@ import {
   TopBar,
 } from "@/components/ui";
 
-const DEFAULT_NAMES = ["Player 1", "Player 2", "Player 3", "Player 4"];
-
-export default function NewGamePage() {
+export default function CreateOnlineGamePage() {
   const router = useRouter();
-  const [numPlayers, setNumPlayers] = useState(2);
+  const [numPlayers, setNumPlayers] = useState(4);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
-  const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
+  const [name, setName] = useState("");
   const [board, setBoard] = useState<Board | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setThemes(allThemes());
-    setBoard(createDuelBoard());
+    setBoard(generateBoard());
+    setName(loadProfile().name);
   }, []);
 
   const theme = themes.find((t) => t.id === themeId) ?? themes[0];
 
-  function start() {
+  async function create() {
     if (!board) return;
-    saveGameConfig({
-      numPlayers,
-      themeId,
-      board,
-      playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
-    });
-    router.push("/game");
+    setBusy(true);
+    setError(null);
+    try {
+      const matchID = await createMatch(numPlayers, board, themeId);
+      await joinMatch(matchID, name.trim() || "Nomad", themeId);
+      router.push(`/online/room/${matchID}`);
+    } catch {
+      setError(
+        "Could not reach the game server. Make sure it is running (npm run server).",
+      );
+      setBusy(false);
+    }
   }
 
   return (
     <Shell>
-      <TopBar title="New Journey" />
+      <TopBar title="Create Game" />
+
+      <Card className="mb-4">
+        <SectionLabel>Your name</SectionLabel>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nomad"
+          className="w-full rounded-xl border border-line bg-parchment px-3 py-2.5 text-sm text-ink outline-none focus:border-ink/40"
+        />
+      </Card>
 
       <Card className="mb-4">
         <SectionLabel>Players</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          {[3, 4].map((n) => (
+        <div className="grid grid-cols-3 gap-2">
+          {[2, 3, 4].map((n) => (
             <Chip key={n} selected={numPlayers === n} onClick={() => setNumPlayers(n)}>
-              {n} players
+              {n}
             </Chip>
-          ))}
-        </div>
-        <div className="mt-3 space-y-2">
-          {Array.from({ length: numPlayers }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span
-                className="h-4 w-4 shrink-0 rounded-full border border-ink/20"
-                style={{ background: PLAYER_COLORS[i] }}
-              />
-              <input
-                value={names[i]}
-                onChange={(e) => {
-                  const next = [...names];
-                  next[i] = e.target.value;
-                  setNames(next);
-                }}
-                placeholder={DEFAULT_NAMES[i]}
-                className="w-full rounded-xl border border-line bg-parchment px-3 py-2 text-sm text-ink outline-none focus:border-ink/40"
-              />
-            </div>
           ))}
         </div>
       </Card>
 
       <Card className="mb-4">
-        <SectionLabel>Theme</SectionLabel>
+        <SectionLabel>Board theme</SectionLabel>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {themes.map((t) => (
             <Chip
@@ -100,7 +96,7 @@ export default function NewGamePage() {
 
       <Card className="mb-5">
         <div className="mb-2 flex items-center justify-between">
-          <SectionLabel>Board · Classic 19 hexes</SectionLabel>
+          <SectionLabel>Board</SectionLabel>
           {board && (
             <span className="text-xs font-semibold text-ink-soft">
               balance {board.score}
@@ -109,9 +105,9 @@ export default function NewGamePage() {
         </div>
         <div className="overflow-hidden rounded-xl border border-line">
           {board && theme ? (
-            <HexBoard board={board} theme={theme} className="aspect-square w-full" />
+            <HexBoard board={board} theme={theme} className="aspect-[4/3] w-full" />
           ) : (
-            <div className="flex aspect-square items-center justify-center text-ink-faint">
+            <div className="flex aspect-[4/3] items-center justify-center text-ink-faint">
               Generating…
             </div>
           )}
@@ -121,8 +117,14 @@ export default function NewGamePage() {
         </SecondaryButton>
       </Card>
 
-      <PrimaryButton disabled={!board} onClick={start}>
-        Start Journey
+      {error && (
+        <p className="mb-3 rounded-xl border border-rust/40 bg-rust/10 px-3 py-2 text-sm text-rust">
+          {error}
+        </p>
+      )}
+
+      <PrimaryButton disabled={!board || busy} onClick={create}>
+        {busy ? "Creating…" : "Create Game"}
       </PrimaryButton>
     </Shell>
   );

@@ -6,8 +6,9 @@ const withBasePath = (path: string) => `${basePath}${path}`;
 
 export const metadata: Metadata = {
   title: "Hamsa Nomads",
-  description: "A warm travel-coded hex trading game: build, trade, explore, and play pass-and-play on one phone.",
-  manifest: withBasePath("/manifest.webmanifest"),
+  description:
+    "Build · Trade · Explore — a mobile-first, themeable hex-board trading game. Pass-and-play or online with friends.",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f7efdf",
+  themeColor: "#f2ead9",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -30,9 +31,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="bg-[#f7efdf] font-sans text-[#17324d] antialiased">
-        {children}
-      </body>
+      <body className="bg-sand font-sans text-ink antialiased">{children}</body>
     </html>
   );
 }

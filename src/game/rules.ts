@@ -5,9 +5,11 @@ import type {
   ResourceCounts,
   ResourceKey,
 } from "@/types/game";
+import type { DevCardType } from "@/types/game";
 import {
   BANK_TRADE_RATE,
   BUILD_COSTS,
+  DEV_CARD_COST,
   PIECE_LIMITS,
   type BuildableKind,
 } from "./constants";
@@ -131,6 +133,27 @@ export function canBankTrade(
   receive: ResourceKey,
 ): boolean {
   return give !== receive && resources[give] >= BANK_TRADE_RATE;
+}
+
+export function canBuyDevCard(G: GameState, player: string): boolean {
+  return G.devDeck.length > 0 && canPayCost(G.players[player].resources, DEV_CARD_COST);
+}
+
+/**
+ * Index of a card of `type` that may be played this turn, or -1.
+ * A card cannot be played the turn it was bought, only one development
+ * card may be played per turn, and victory cards are never "played".
+ */
+export function playableDevCardIndex(
+  G: GameState,
+  player: string,
+  type: DevCardType,
+  currentTurn: number,
+): number {
+  if (type === "victory" || G.playedDevCardThisTurn) return -1;
+  return G.players[player].devCards.findIndex(
+    (c) => c.type === type && c.turnBought < currentTurn,
+  );
 }
 
 /** Tiles the bandit may be moved to (anywhere but where it stands). */

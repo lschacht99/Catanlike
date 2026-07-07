@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { Board, Building } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS, TOKEN_PIPS } from "@/game/constants";
-import { buildGeometry, hexCorners } from "@/game/geometry";
+import { buildGeometry, hexCenter, hexCorners } from "@/game/geometry";
+import TileArt, { shade } from "./TileArt";
 
 interface HexBoardProps {
   board: Board;
@@ -19,8 +20,13 @@ interface HexBoardProps {
   onVertexTap?: (id: string) => void;
   onEdgeTap?: (id: string) => void;
   onTileTap?: (id: number) => void;
+  /** Gentle perspective tilt so the extruded tiles read as 3D. */
+  tilt?: boolean;
   className?: string;
 }
+
+/** How far the extruded tile sides drop below the top face (SVG units). */
+const TILE_DEPTH = 1.3;
 
 const EMPTY_BUILDINGS: Record<string, Building> = {};
 const EMPTY_ROADS: Record<string, string> = {};
@@ -37,10 +43,13 @@ export default function HexBoard({
   onVertexTap,
   onEdgeTap,
   onTileTap,
+  tilt = false,
   className = "",
 }: HexBoardProps) {
   const geometry = useMemo(() => buildGeometry(board.tiles), [board.tiles]);
   const svgRef = useRef<SVGSVGElement>(null);
+  /** Unique prefix so clip-path ids don't clash between boards on a page. */
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
 
   // --- pan & zoom (single-finger drag, two-finger pinch, wheel) ---
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
@@ -125,7 +134,12 @@ export default function HexBoard({
         ref={svgRef}
         viewBox={`${minX - pad} ${minY - pad} ${vbW} ${vbH}`}
         className="h-full w-full touch-none select-none"
-        style={{ background: theme.board.sea }}
+        style={{
+          background: theme.board.sea,
+          ...(tilt
+            ? { transform: "perspective(750px) rotateX(12deg) scale(1.06)" }
+            : {}),
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -145,42 +159,58 @@ export default function HexBoard({
               tile.resource === "desert" ? theme.desert : theme.resources[tile.resource];
             const hot = tile.token === 6 || tile.token === 8;
             const targetable = highlightTileSet.has(tile.id);
+            const sidePoints = corners
+              .map((p) => `${p.x},${p.y + TILE_DEPTH}`)
+              .join(" ");
             return (
               <g
                 key={tile.id}
                 onClick={tap(onTileTap ? () => onTileTap(tile.id) : undefined)}
                 className={onTileTap && targetable ? "cursor-pointer" : undefined}
               >
+                {/* Extruded side: the same hex dropped down, darkened. */}
+                <polygon points={sidePoints} fill={shade(style.color, 0.55)} />
+                <polygon points={points} fill={style.color} />
+                {style.image ? (
+                  <>
+                    <clipPath id={`${uid}t${tile.id}`}>
+                      <polygon points={points} />
+                    </clipPath>
+                    <image
+                      href={style.image}
+                      x={cx - 8.7}
+                      y={cy - 10}
+                      width={17.4}
+                      height={20}
+                      preserveAspectRatio="xMidYMid slice"
+                      clipPath={`url(#${uid}t${tile.id})`}
+                      className="pointer-events-none"
+                    />
+                  </>
+                ) : (
+                  <TileArt resource={tile.resource} color={style.color} cx={cx} cy={cy} />
+                )}
                 <polygon
                   points={points}
-                  fill={style.color}
-                  stroke={targetable ? "#facc15" : "#0f172a"}
-                  strokeWidth={targetable ? 0.9 : 0.5}
+                  fill="none"
+                  stroke={targetable ? "#b45a37" : "#faf5e9"}
+                  strokeWidth={targetable ? 1 : 0.7}
                   className={targetable ? "animate-pulse" : undefined}
                 />
-                <text
-                  x={cx}
-                  y={cy - 4.2}
-                  textAnchor="middle"
-                  fontSize="4"
-                  className="pointer-events-none"
-                >
-                  {style.icon}
-                </text>
                 {tile.token !== null && (
                   <g className="pointer-events-none">
-                    <circle cx={cx} cy={cy + 1.8} r="3.4" fill="#f5f0e6" stroke="#44403c" strokeWidth="0.3" />
+                    <circle cx={cx} cy={cy + 1.8} r="3.4" fill="#faf5e9" stroke="#b9a77f" strokeWidth="0.3" />
                     <text
                       x={cx}
                       y={cy + 3.2}
                       textAnchor="middle"
                       fontSize="3.8"
                       fontWeight="700"
-                      fill={hot ? "#dc2626" : "#1c1917"}
+                      fill={hot ? "#b0341f" : "#1e3a5f"}
                     >
                       {tile.token}
                     </text>
-                    <g fill={hot ? "#dc2626" : "#1c1917"}>
+                    <g fill={hot ? "#b0341f" : "#1e3a5f"}>
                       {Array.from({ length: TOKEN_PIPS[tile.token] ?? 0 }).map((_, i, arr) => (
                         <circle
                           key={i}
@@ -192,20 +222,33 @@ export default function HexBoard({
                     </g>
                   </g>
                 )}
-                {banditTile === tile.id && (
-                  <text
-                    x={cx}
-                    y={cy + 0.6}
-                    textAnchor="middle"
-                    fontSize="5.5"
-                    className="pointer-events-none"
-                  >
-                    {theme.bandit.icon}
-                  </text>
-                )}
               </g>
             );
           })}
+
+          {/* Bandit: a single element so it glides between tiles. */}
+          {banditTile !== null &&
+            (() => {
+              const tile = board.tiles.find((t) => t.id === banditTile);
+              if (!tile) return null;
+              const c = hexCenter(tile.q, tile.r);
+              return (
+                <g
+                  className="pointer-events-none"
+                  style={{
+                    transform: `translate(${c.x}px, ${c.y}px)`,
+                    transition: "transform 0.6s cubic-bezier(0.34, 1.3, 0.64, 1)",
+                  }}
+                >
+                  <g key={banditTile} className="bandit-hop">
+                    <ellipse cx="0" cy="2.6" rx="2.6" ry="0.8" fill="rgba(0,0,0,0.25)" />
+                    <text x="0" y="0.6" textAnchor="middle" fontSize="5.5">
+                      {theme.bandit.icon}
+                    </text>
+                  </g>
+                </g>
+              );
+            })()}
 
           {/* Roads */}
           {Object.entries(roads).map(([edgeId, player]) => {
@@ -223,7 +266,7 @@ export default function HexBoard({
                 stroke={PLAYER_COLORS[Number(player)]}
                 strokeWidth="1.8"
                 strokeLinecap="round"
-                className="pointer-events-none"
+                className="pointer-events-none piece-pop"
               />
             );
           })}
@@ -246,7 +289,7 @@ export default function HexBoard({
                     y1={a.y + (b.y - a.y) * 0.2}
                     x2={a.x + (b.x - a.x) * 0.8}
                     y2={a.y + (b.y - a.y) * 0.8}
-                    stroke="#facc15"
+                    stroke="#b45a37"
                     strokeWidth="1.6"
                     strokeDasharray="1.5 1"
                     strokeLinecap="round"
@@ -267,13 +310,13 @@ export default function HexBoard({
               : `${v.x - 1.8},${v.y + 1.6} ${v.x - 1.8},${v.y - 0.6} ${v.x},${v.y - 2} ${v.x + 1.8},${v.y - 0.6} ${v.x + 1.8},${v.y + 1.6}`;
             return (
               <polygon
-                key={vertexId}
+                key={`${vertexId}-${building.city ? "c" : "s"}`}
                 points={shape}
                 fill={color}
-                stroke={clickable ? "#facc15" : "#0f172a"}
-                strokeWidth={clickable ? 0.7 : 0.4}
+                stroke={clickable ? "#b45a37" : "#faf5e9"}
+                strokeWidth={clickable ? 0.7 : 0.45}
                 onClick={tap(clickable ? () => onVertexTap(vertexId) : undefined)}
-                className={clickable ? "cursor-pointer animate-pulse" : undefined}
+                className={clickable ? "cursor-pointer animate-pulse piece-pop" : "piece-pop"}
               />
             );
           })}
@@ -290,8 +333,8 @@ export default function HexBoard({
                     <circle cx={v.x} cy={v.y} r="3.4" fill="transparent" />
                     <circle
                       cx={v.x} cy={v.y} r="1.8"
-                      fill="rgba(250,204,21,0.55)"
-                      stroke="#facc15"
+                      fill="rgba(180,90,55,0.45)"
+                      stroke="#b45a37"
                       strokeWidth="0.5"
                       className="animate-pulse pointer-events-none"
                     />
@@ -305,21 +348,21 @@ export default function HexBoard({
       <div className="absolute bottom-2 right-2 flex flex-col gap-1">
         <button
           aria-label="Zoom in"
-          className="h-9 w-9 rounded-lg bg-black/50 text-lg font-bold text-white backdrop-blur"
+          className="h-9 w-9 rounded-full border border-line bg-cream/90 text-lg font-bold text-ink shadow-card backdrop-blur"
           onClick={() => setView((v) => ({ ...v, scale: clampScale(v.scale * 1.3) }))}
         >
           +
         </button>
         <button
           aria-label="Zoom out"
-          className="h-9 w-9 rounded-lg bg-black/50 text-lg font-bold text-white backdrop-blur"
+          className="h-9 w-9 rounded-full border border-line bg-cream/90 text-lg font-bold text-ink shadow-card backdrop-blur"
           onClick={() => setView((v) => ({ ...v, scale: clampScale(v.scale / 1.3) }))}
         >
           −
         </button>
         <button
           aria-label="Reset view"
-          className="h-9 w-9 rounded-lg bg-black/50 text-xs font-bold text-white backdrop-blur"
+          className="h-9 w-9 rounded-full border border-line bg-cream/90 text-xs font-bold text-ink shadow-card backdrop-blur"
           onClick={() => setView({ scale: 1, tx: 0, ty: 0 })}
         >
           ⟳

@@ -1,9 +1,10 @@
-# ⬡ Hex Isles
+# 🪬 Hamsa Nomads
 
-A **mobile-first, themeable hex-board resource trading game** you can play
-pass-and-play on one phone. Built with TypeScript, React, Tailwind, boardgame.io, and a mobile-first 3D board layer designed for a Vite/Three.js migration path.
+**Build · Trade · Explore** — a mobile-first, themeable hex-board trading game.
+Play pass-and-play on one phone or **online with friends**. Built with
+Next.js, TypeScript, Tailwind and [boardgame.io](https://boardgame.io).
 
-Hex Isles is an original game *inspired by* classic hex resource-trading
+Hamsa Nomads is an original game *inspired by* classic hex resource-trading
 mechanics. It uses its own name, art, labels and text, and is not affiliated
 with or endorsed by any commercial board game.
 
@@ -11,64 +12,70 @@ with or endorsed by any commercial board game.
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
+npm run dev        # web app on http://localhost:3000
+```
+
+For **online multiplayer**, also run the game server in a second terminal:
+
+```bash
+npm run server     # boardgame.io server on :8000
 ```
 
 Other commands:
 
 ```bash
-npm test           # vitest — generator + rules unit tests
+npm test           # vitest — generator, rules, dev-card and scoring tests
 npm run build      # production build
 npm start          # serve the static export from ./out
 ```
 
-Open it on a phone (or a narrow browser window), tap **Play**, pick 2–4
-players and a theme, and pass the phone around.
+Configuration:
 
-## What's playable (MVP)
+- `NEXT_PUBLIC_GAME_SERVER` — URL of the game server as seen by browsers
+  (defaults to `http://<current-host>:8000`).
+- `GAME_SERVER_PORT` — port for `npm run server` (default 8000).
+- `GAME_ORIGINS` — comma-separated extra allowed origins in production.
 
-- **2-player duel mode** with a smaller 7-hex preset, plus 3–4 player local pass-and-play
-- Balanced **19-hex board generator** (generates hundreds of candidates and
-  keeps the best-scoring one)
-- Snake-order setup: two settlements + roads each, second settlement pays out
-- Dice roll → resource distribution to adjacent settlements (x1) / cities (x2)
-- Build roads, settlements (distance rule + road connectivity) and cities
-- **Bandit** on a 7: blocks a tile's production and steals a random card from
-  an adjacent opponent
-- Bank trade **4 : 1**
-- Victory at **10 points** (settlement = 1, city = 2)
-- **Map Forge**: generate/regenerate boards, see the balance score, save
-  boards to localStorage and replay them
-- **Theme editor**: duplicate a built-in theme, rename every resource, change
-  icons/colors and building names, saved to localStorage
-- Installable PWA shell (manifest + icons), 3D elevated board presentation, pinch-zoom/drag tap layer, bottom drawer UI sized for thumbs
-- Backend Gemini theme endpoint scaffold at `server/gemini/theme.ts`; API keys stay server-side and generated JSON is sanitized before use
-- Optional advanced rules module scaffold (`guardians-and-guilds`) for knights, activation, invasion track, city improvements, and progress-card style systems
+## Playing online
 
+1. One player taps **Create Game**, picks the player count, theme and board,
+   and lands in the **Waiting Room** with a game code.
+2. Friends tap **Join Game** and paste the code (works across devices on the
+   same network, or anywhere the game server is reachable).
+3. When every seat is taken the match starts automatically. Turns, dice,
+   builds and cards sync live through the authoritative server.
 
-## Publish to GitHub Pages
+## What's in the game
 
-This repo is configured for GitHub Pages using Next.js static export and the official Pages GitHub Actions flow:
+- 2–4 players, **pass-and-play or online**
+- Balanced **19-hex board generator** (best-of-N with a balance score)
+- Snake-order setup, dice production, roads / villages / cities
+- **Journey (development) cards**: Knight, Victory Point, Road Building,
+  Year of Plenty, Monopoly — standard 25-card deck, one play per turn,
+  never on the turn you bought it
+- **Largest Army** and **Longest Route** banners (2 VP each, with proper
+  stealing rules and road-cutting by settlements)
+- Bandit on a 7: blocks production, steals from a neighbor
+- Bank trade 4:1 · win at 10 points
+- **Roll-result sheet** after every roll showing who harvested what
+- **Map Forge**: generate, score and save boards; replay from the Collection
+- **Illustrated tiles**: procedural vector art per resource (forest,
+  bricks, wheat, pasture, mountains, dunes) recolored by the theme — or
+  load your own tile artwork per resource (image URL or uploaded photo)
+  in the theme editor
+- **Collection**: board themes (with a full theme editor) and saved boards
+- **Stats**: games, wins, win rate and journey history (stored locally)
+- **Profile**: name, avatar, sound/music toggles
+- **How to Play** tutorial
+- Installable PWA shell, pinch-zoom board, thumb-sized bottom controls
 
-1. Push or merge to `main`.
-2. In the GitHub repo, open **Settings → Pages**.
-3. Set **Build and deployment → Source** to **GitHub Actions**.
-4. Wait for the **Deploy static site to GitHub Pages** workflow to finish.
-5. Open `https://<github-user>.github.io/<repo-name>/`.
+## Screens
 
-For this repository name, the manual local Pages build is:
-
-```bash
-npm run pages:build
-```
-
-To preview the exact static export locally after `npm run pages:build`, run:
-
-```bash
-npm start
-```
-
-The workflow sets `NEXT_PUBLIC_BASE_PATH` to the repository name prefixed with a slash, for example `/Catanlike`, so links, scripts, styles, manifest, and icons work from a GitHub Pages subpath.
+Home · New Journey · Game (with Build / Trade / Cards sheets and the robber
+flow) · Create Game · Join Game · Waiting Room · Online Play · Map Forge ·
+Collection (themes + boards) · Stats · Profile · How to Play — all in a warm
+parchment design system (navy ink + terracotta accents, serif display type,
+pill buttons, bottom navigation).
 
 ## The one rule that matters: themes never touch rules
 
@@ -100,40 +107,49 @@ for future AI-generated tile art.
 ## Architecture
 
 ```
+server/
+  index.ts           # boardgame.io server for online matches (tsx)
 src/
   app/
-    page.tsx           # home menu
-    new/page.tsx       # players + theme + board → start
-    game/page.tsx      # boardgame.io client (pass-and-play)
-    forge/page.tsx     # map generator w/ balance score + save
-    boards/page.tsx    # saved boards, replayable
-    themes/page.tsx    # theme list + editor
+    page.tsx         # home menu
+    new/             # pass-and-play setup (players, names, theme, board)
+    game/            # local boardgame.io client
+    online/create/   # create online match (lobby)
+    online/join/     # join by game code
+    online/room/[id] # waiting room (polls the lobby)
+    online/play/[id] # SocketIO multiplayer client
+    forge/           # map generator w/ balance score + save
+    collection/      # themes (editor) + saved boards
+    stats/           # local game history & overview
+    profile/         # name, avatar, settings
+    how-to-play/     # tutorial
   components/
-    HexBoard.tsx       # pure SVG board, pan/zoom, tap targets
-    GameBoard.tsx      # in-game screen wiring state → UI
-    PlayerHand.tsx     # resource chips (theme-labelled)
-    BuildMenu.tsx      # build buttons with costs + piece limits
-    TradePanel.tsx     # 4:1 bank trade sheet
+    HexBoard.tsx     # pure SVG board, pan/zoom, tap targets
+    GameBoard.tsx    # in-game screen (local + online aware)
+    BuildMenu.tsx    # build sheet incl. journey cards
+    DevCards.tsx     # card hand + play flows (pickers for YoP/Monopoly)
+    TradePanel.tsx   # 4:1 market gate sheet
+    RollResult.tsx   # dice + production overlay
+    PlayerHand.tsx   # resource chips (theme-labelled)
+    ThemeEditor.tsx  # full theme editor
+    Sheet.tsx, ui.tsx# design-system primitives (parchment/navy/rust)
   game/
-    engine/            # boardgame.io game definition entrypoint
-    game.ts            # boardgame.io game definition (phases, turn order)
-    moves.ts           # roll / build / trade / bandit moves
-    rules.ts           # ALL placement & cost validation
-    scoring.ts         # victory points, winner
-    board-generator/   # 2-player duel preset + board validation
-    generator.ts       # candidate generation + balance scoring
-    geometry.ts        # axial hex math, vertex/edge derivation
-    theme-generator/   # Gemini JSON schema sanitizer + sample generated themes
-    themes.ts          # theme registry (built-in + localStorage)
-    constants.ts       # costs, tile counts, tokens, limits
-  types/
-    game.ts, theme.ts  # strict shared types
+    game.ts          # local + online game definitions (phases, turn order)
+    moves.ts         # roll / build / trade / bandit / dev-card moves
+    rules.ts         # ALL placement, cost & card validation
+    scoring.ts       # points, longest road, largest army, winner
+    generator.ts     # candidate generation + balance scoring
+    geometry.ts      # axial hex math, vertex/edge derivation
+    themes.ts        # theme registry (built-in + localStorage)
+    constants.ts     # costs, decks, limits, palette
   lib/
-    storage.ts         # localStorage: active game, saved boards
+    online.ts        # lobby client, seats/credentials
+    profile.ts       # profile + local stats storage
+    storage.ts       # game config + saved boards
 ```
 
 Rendering never validates anything; `rules.ts` is the single source of truth
-and the UI just asks it for the currently-legal vertices/edges/tiles.
+and the UI just asks it for the currently-legal vertices/edges/tiles/cards.
 
 ### Board generation
 
@@ -149,33 +165,8 @@ scores hundreds of random candidates and penalizes:
 ## Roadmap (scaffolded, not built)
 
 - Ports / harbor trading (3:1, 2:1)
-- Longest-road bonus and development cards
+- Player-to-player trade offers
 - Discard-half on a 7
-- Player-to-player trades
-- Online multiplayer (boardgame.io server or Colyseus rooms)
-- AI tile art from each theme's `tilePrompt`
+- Hidden opponent hands online (boardgame.io playerView)
 - In-progress game persistence across refreshes
-
-
-## Open-source pattern review
-
-Before expanding the MVP, we reviewed public patterns rather than cloning a full hex-trading game:
-
-- `boardgame.io` remains the right fit for deterministic moves, phases, logs, multiplayer sync, and lobby/server support. The project already used it, so the implementation keeps game rules in pure move functions.
-- Three.js/R3F hex-grid and terrain examples are useful architecturally, but adding new scoped packages was blocked by the registry policy in this environment. The current renderer is a lightweight mobile-first pseudo-3D layer with isolated files under `src/three/` so it can be swapped for `@react-three/fiber` components once dependencies are available.
-- Three.js dice-roller libraries such as `dice-box-threejs` are intentionally not vendored because they add physics weight and uncontrolled randomness. Hex Isles uses engine-controlled dice results and a deterministic visual tumble.
-
-## Gemini theme endpoint
-
-Run the API server separately after compiling TypeScript or with a TS runner:
-
-```bash
-GEMINI_API_KEY=... PORT=8787 node dist/server/index.js
-```
-
-`POST /api/gemini/theme` accepts JSON with `prompt`, `location`, and optional base64 image data. The server calls Gemini 2.5 Flash only from the backend, requests JSON output, sanitizes all strings, clamps arrays, preserves canonical resource ids, and falls back to the sample Cherry Bamboo Highlands theme when no API key is present.
-
-Sample generated themes are stored in `src/game/theme-generator/samples.ts`:
-
-- Cherry Bamboo Highlands
-- Blocky Mountain Village
+- AI tile art from each theme's `tilePrompt`

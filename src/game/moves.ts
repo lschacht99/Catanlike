@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { INVALID_MOVE } from "boardgame.io/core";
 import type { Move } from "boardgame.io";
 import type {

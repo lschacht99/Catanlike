@@ -1,5 +1,10 @@
 import type {
+  CommodityCounts,
+  CommodityKey,
   DevCardType,
+  ProgressCardType,
+  ProgressTrackCounts,
+  ProgressTrackKey,
   ResourceCounts,
   ResourceKey,
   TileResource,

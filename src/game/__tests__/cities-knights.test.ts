@@ -11,14 +11,14 @@ describe("cities and knights rules", () => {
 
   it("plays progress cards from hand", () => {
     const G = makeState(2); G.variant = "cities-knights"; G.players[0].progressCards = ["oreRush"]; G.progressDiscards = [];
-    playProgressCard({ G, playerID: "0" } as never, "oreRush");
+    (playProgressCard as any)({ G, playerID: "0" }, "oreRush");
     expect(G.players[0].resources.ore).toBe(2);
     expect(G.players[0].progressCards).toHaveLength(0);
   });
 
   it("upgrades city improvements with commodities", () => {
     const G = makeState(2); G.variant = "cities-knights"; G.players[0].commodities = { coin: 0, cloth: 1, book: 0 }; G.players[0].improvements = { trade: 0, politics: 0, science: 0 }; G.buildings.a = { player: "0", city: true };
-    improveCity({ G, playerID: "0" } as never, "trade");
+    (improveCity as any)({ G, playerID: "0" }, "trade");
     expect(G.players[0].improvements.trade).toBe(1);
   });
 

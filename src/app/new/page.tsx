@@ -2,13 +2,14 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Board, GameVariant, PlayerMode } from "@/types/game";
+import type { Board, BotDifficulty, GameVariant, PlayerMode, PlayerSetup } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
 import { createDuelBoard } from "@/game/board-generator/presets";
 import { allThemes } from "@/game/themes";
 import { saveGameConfig } from "@/lib/storage";
+import { BOT_DIFFICULTY_LABELS, PLAYER_MODE_LABELS, joinCodeForSeat } from "@/game/player-control";
 import HexBoard from "@/components/HexBoard";
 import {
   Card,
@@ -30,7 +31,12 @@ function NewGamePageInner() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   const [board, setBoard] = useState<Board | null>(null);
-  const [playerModes, setPlayerModes] = useState<PlayerMode[]>(["human", "human", "bot", "bot"]);
+  const [playerSetups, setPlayerSetups] = useState<PlayerSetup[]>([
+    { mode: "human" },
+    { mode: "human" },
+    { mode: "bot", botDifficulty: "normal" },
+    { mode: "bot", botDifficulty: "normal" },
+  ]);
   const variant = (search.get("variant") === "cities-knights" ? "cities-knights" : "base") as GameVariant;
   const localMultiplayer = search.get("multiplayer") === "local";
 
@@ -48,9 +54,23 @@ function NewGamePageInner() {
   const theme = themes.find((t) => t.id === themeId) ?? themes[0];
 
   function setMode(index: number, mode: PlayerMode) {
-    const next = [...playerModes];
-    next[index] = mode;
-    setPlayerModes(next);
+    setPlayerSetups((current) => {
+      const next = [...current];
+      next[index] = {
+        mode,
+        botDifficulty: mode === "bot" ? next[index]?.botDifficulty ?? "normal" : undefined,
+        joinCode: mode === "remote" ? next[index]?.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
+      };
+      return next;
+    });
+  }
+
+  function setDifficulty(index: number, botDifficulty: BotDifficulty) {
+    setPlayerSetups((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], mode: "bot", botDifficulty };
+      return next;
+    });
   }
 
   function start() {
@@ -60,7 +80,12 @@ function NewGamePageInner() {
       themeId,
       board,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
-      playerModes: playerModes.slice(0, numPlayers),
+      playerModes: playerSetups.slice(0, numPlayers).map((setup) => setup.mode),
+      playerSetups: playerSetups.slice(0, numPlayers).map((setup, index) => ({
+        mode: setup.mode,
+        botDifficulty: setup.mode === "bot" ? setup.botDifficulty ?? "normal" : undefined,
+        joinCode: setup.mode === "remote" ? setup.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
+      })),
       variant,
     });
     router.push("/game");
@@ -99,13 +124,34 @@ function NewGamePageInner() {
                 className="w-full rounded-xl border border-line bg-parchment px-3 py-2 text-sm text-ink outline-none focus:border-ink/40"
               />
               <select
-                value={playerModes[i] ?? "human"}
+                value={playerSetups[i]?.mode ?? "human"}
                 onChange={(e) => setMode(i, e.target.value as PlayerMode)}
+                aria-label={`Seat ${i + 1} player type`}
                 className="rounded-xl border border-line bg-parchment px-2 py-2 text-xs text-ink outline-none"
               >
-                <option value="human">Human</option>
-                <option value="bot">CPU</option>
+                <option value="human">Human on this device / pass-and-play</option>
+                <option value="remote">Remote human</option>
+                <option value="bot">Bot</option>
               </select>
+              <div className="col-span-3 ml-6 rounded-xl border border-line bg-parchment/60 px-3 py-2 text-xs text-ink-soft">
+                <b className="text-ink">{PLAYER_MODE_LABELS[playerSetups[i]?.mode ?? "human"]}</b>
+                {playerSetups[i]?.mode === "bot" && (
+                  <label className="mt-2 flex items-center justify-between gap-2">
+                    Difficulty
+                    <select
+                      value={playerSetups[i]?.botDifficulty ?? "normal"}
+                      onChange={(e) => setDifficulty(i, e.target.value as BotDifficulty)}
+                      aria-label={`Seat ${i + 1} bot difficulty`}
+                      className="rounded-lg border border-line bg-parchment px-2 py-1 text-xs text-ink outline-none"
+                    >
+                      {Object.entries(BOT_DIFFICULTY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                )}
+                {playerSetups[i]?.mode === "remote" && (
+                  <p className="mt-1 font-semibold text-ink">Join code reserved: {playerSetups[i]?.joinCode ?? joinCodeForSeat("LOCAL", i)}</p>
+                )}
+              </div>
             </div>
           ))}
         </div>

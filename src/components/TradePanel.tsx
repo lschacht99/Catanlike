@@ -62,7 +62,9 @@ export default function TradePanel({
 
   function rivalName(id: string): string {
     const base = playerNames[Number(id)] ?? `Player ${Number(id) + 1}`;
-    return playerModes[Number(id)] === "bot" ? `${base} CPU` : base;
+    if (playerModes[Number(id)] === "bot") return `${base} Bot`;
+    if (playerModes[Number(id)] === "remote") return `${base} Remote`;
+    return base;
   }
 
   function Row({

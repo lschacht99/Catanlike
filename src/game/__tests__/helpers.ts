@@ -20,6 +20,7 @@ export function makeState(numPlayers = 3): GameState {
     names: ["Navy", "Rust", "Olive", "Gold"].slice(0, numPlayers),
     buildings: {},
     roads: {},
+    knights: {},
     banditTile: board.tiles.find((t) => t.resource === "desert")!.id,
     devDeck: [],
     largestArmyHolder: null,

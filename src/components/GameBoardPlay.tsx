@@ -37,6 +37,7 @@ import {
 import { victoryPoints } from "@/game/scoring";
 import { evaluateBotTrade } from "@/game/trade-ai";
 import { loadGameConfig } from "@/lib/storage";
+import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
 import HexBoardPlay from "./HexBoardPlay";
 import PlayerHand from "./PlayerHand";
@@ -85,7 +86,10 @@ export default function GameBoardPlay({
   const resources = G.players[current].resources;
   const pieces = pieceCounts(G, current);
   const gameover = ctx.gameover as { winner: string } | undefined;
-  const currentIsCpu = playerModes[Number(current)] === "bot";
+  const playerSetups = normalizePlayerSetups(G.numPlayers, G.playerSetups, playerModes);
+  const currentIsCpu = isBotSeat(G, current);
+  const currentIsRemote = playerSetups[Number(current)]?.mode === "remote";
+  const canControlCurrent = canLocalDeviceControlSeat(G, current);
   const boardMoves = moves as ExtendedMoves;
   const names = G.playerNames ?? G.names ?? [];
   const player = G.players[current];
@@ -110,7 +114,7 @@ export default function GameBoardPlay({
     if (config) saveSnapshot({ config, state: { G, ctx: { currentPlayer: ctx.currentPlayer, phase: ctx.phase, turn: ctx.turn, playOrder: ctx.playOrder, playOrderPos: ctx.playOrderPos } } });
   }, [G, ctx.currentPlayer, ctx.phase, ctx.turn, ctx.playOrder, ctx.playOrderPos]);
 
-  useEffect(() => { setPrivacyGate(playerModes[Number(current)] !== "bot"); }, [current, playerModes]);
+  useEffect(() => { setPrivacyGate(canControlCurrent); }, [canControlCurrent, current]);
 
   useEffect(() => {
     if (!G.lastRoll) return;
@@ -218,7 +222,7 @@ export default function GameBoardPlay({
   }, [G, boardMoves, ctx.phase, current, currentIsCpu, gameover, inSetup, moves, variant]);
 
   function onVertexTap(id: string) {
-    if (currentIsCpu || privacyGate) return;
+    if (currentIsCpu || currentIsRemote || privacyGate) return;
     if (inSetup) ask("Confirm settlement", "Place your settlement on this corner.", () => moves.placeSettlement(id));
     else if (buildMode === "settlement") {
       ask("Build settlement", "Spend wood, brick, grain, and wool.", () => moves.buildSettlement(id));
@@ -233,7 +237,7 @@ export default function GameBoardPlay({
   }
 
   function onEdgeTap(id: string) {
-    if (currentIsCpu || privacyGate) return;
+    if (currentIsCpu || currentIsRemote || privacyGate) return;
     if (inSetup) ask("Confirm route", "Place your starting route next to the settlement.", () => moves.placeRoad(id));
     else if (buildMode === "road") {
       ask("Build route", "Spend 1 wood and 1 brick.", () => moves.buildRoad(id));
@@ -242,7 +246,7 @@ export default function GameBoardPlay({
   }
 
   function onTileTap(id: number) {
-    if (currentIsCpu || privacyGate) return;
+    if (currentIsCpu || currentIsRemote || privacyGate) return;
     if (G.mustMoveBandit) ask("Move bandit", "Move the bandit to this tile and steal if possible.", () => moves.moveBandit(id));
   }
 
@@ -271,7 +275,8 @@ export default function GameBoardPlay({
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           {Object.keys(G.players).map((id) => {
             const active = id === current;
-            const mode = playerModes[Number(id)] === "bot" ? "CPU" : "Human";
+            const setup = playerSetups[Number(id)] ?? { mode: "human" };
+            const mode = setup.mode === "bot" ? `Bot ${BOT_DIFFICULTY_LABELS[setup.botDifficulty ?? "normal"]}` : setup.mode === "remote" ? "Remote" : "Local";
             return (
               <div key={id} className={`min-w-[6rem] flex-1 rounded-xl border px-2 py-1.5 ${active ? "border-yellow-400 bg-white/15 shadow-[0_0_24px_rgba(250,204,21,0.2)]" : "border-white/10 bg-white/5"}`}>
                 <div className="flex items-center justify-between gap-1">
@@ -327,19 +332,19 @@ export default function GameBoardPlay({
             <div className="mt-2"><BuildMenu theme={theme} resources={resources} pieces={pieces} placeable={placeable} activeMode={buildMode} onPick={(kind) => setBuildMode(kind)} includeKnights={variant === "cities-knights"} /></div>
             {variant === "cities-knights" && (
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <button disabled={privacyGate || currentIsCpu || !G.hasRolled || !ownInactiveKnight || resources.grain < 1 || !!gameover} onClick={() => ask("Activate knight", "Spend 1 grain. Active knights defend against raiders.", () => boardMoves.activateKnight?.(ownInactiveKnight))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">Activate knight</button>
+                <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !ownInactiveKnight || resources.grain < 1 || !!gameover} onClick={() => ask("Activate knight", "Spend 1 grain. Active knights defend against raiders.", () => boardMoves.activateKnight?.(ownInactiveKnight))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">Activate knight</button>
                 {TRACK_KEYS_ORDERED.map((track) => {
                   const cost = (improvements[track] ?? 0) + 1;
                   const commodity = TRACK_COMMODITY[track];
-                  return <button key={track} disabled={privacyGate || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
+                  return <button key={track} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
                 })}
-                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
+                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
               </div>
             )}
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button disabled={privacyGate || currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
-              <button disabled={privacyGate || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
-              <button disabled={privacyGate || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
+              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
+              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
+              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
             </div>
           </>
         )}
@@ -357,7 +362,7 @@ export default function GameBoardPlay({
           onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => {
             setShowTrade(false);
             const offer = { proposer: current, target, give, giveAmount, receive, receiveAmount };
-            if (playerModes[Number(target)] === "bot") {
+            if (isBotSeat(G, target)) {
               const decision = evaluateBotTrade(G, offer);
               setTradeNotice(decision.reason);
               if (decision.accepted) boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount);
@@ -386,7 +391,13 @@ export default function GameBoardPlay({
         </div>
       )}
 
-      {privacyGate && !gameover && !currentIsCpu && (
+      {currentIsRemote && !gameover && (
+        <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-sky-300/30 bg-sky-950/90 p-3 text-center text-sm font-bold text-sky-100 shadow-2xl">
+          Remote seat reserved for {names[Number(current)]}. Only that remote player can act for this seat online.
+        </div>
+      )}
+
+      {privacyGate && !gameover && canControlCurrent && !currentIsCpu && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950 p-6 text-center text-white">
           <div className="max-w-sm rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl">
             <p className="text-4xl">🔒</p>

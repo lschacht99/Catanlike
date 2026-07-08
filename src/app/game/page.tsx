@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Client } from "boardgame.io/react";
 import type { BoardProps } from "boardgame.io/react";
 import type { GameConfig, GameState } from "@/types/game";
+import { normalizePlayerSetups } from "@/game/player-control";
 import { createHexIslesGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import { loadGameConfig } from "@/lib/storage";
@@ -20,13 +21,14 @@ export default function GamePage() {
   const HexIslesClient = useMemo(() => {
     if (!config) return null;
     const theme = getTheme(config.themeId);
-    const playerModes = config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human" as const);
+    const playerSetups = normalizePlayerSetups(config.numPlayers, config.playerSetups, config.playerModes);
+    const playerModes = playerSetups.map((setup) => setup.mode);
     const variant = config.variant ?? "base";
     const Board = (props: BoardProps<GameState>) => (
       <GameBoardPlay {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
-      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant),
+      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant, playerSetups),
       board: Board,
       numPlayers: config.numPlayers,
       debug: false,

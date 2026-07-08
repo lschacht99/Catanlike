@@ -1,9 +1,18 @@
-import type { GameState } from "@/types/game";
-import { emptyResources } from "../constants";
+import type { GameState, GameVariant, PlayerMode } from "@/types/game";
+import {
+  emptyCommodities,
+  emptyImprovements,
+  emptyResources,
+} from "../constants";
 import { randomBoard } from "../generator";
 
+interface MakeStateOptions {
+  variant?: GameVariant;
+  playerModes?: PlayerMode[];
+}
+
 /** A bare play-phase state on a deterministic board, for rule tests. */
-export function makeState(numPlayers = 3): GameState {
+export function makeState(numPlayers = 3, options: MakeStateOptions = {}): GameState {
   const board = randomBoard(() => 0.42);
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
@@ -11,6 +20,10 @@ export function makeState(numPlayers = 3): GameState {
       resources: emptyResources(),
       devCards: [],
       knightsPlayed: 0,
+      commodities: emptyCommodities(),
+      improvements: emptyImprovements(),
+      progressCards: [],
+      victoryBonus: 0,
     };
   }
   return {
@@ -18,8 +31,20 @@ export function makeState(numPlayers = 3): GameState {
     board,
     players,
     names: ["Navy", "Rust", "Olive", "Gold"].slice(0, numPlayers),
+    playerNames: ["Navy", "Rust", "Olive", "Gold"].slice(0, numPlayers),
+    playerModes: options.playerModes,
+    variant: options.variant ?? "base",
     buildings: {},
     roads: {},
+    knights: {},
+    activeKnights: {},
+    knightLevels: {},
+    barbarianPosition: 0,
+    lastEventDie: null,
+    pendingTrade: null,
+    lastTradeResult: null,
+    tradeRate: 4,
+    progressDiscards: [],
     banditTile: board.tiles.find((t) => t.resource === "desert")!.id,
     devDeck: [],
     largestArmyHolder: null,

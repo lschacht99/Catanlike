@@ -1,39 +1,75 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Client } from "boardgame.io/react";
 import type { BoardProps } from "boardgame.io/react";
-import type { GameConfig, GameState } from "@/types/game";
-import { createHexIslesGame } from "@/game/game";
+import type { GameConfig, GameState, PlayerMode } from "@/types/game";
+import { createHexIslesGame, createResumeGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import { loadGameConfig } from "@/lib/storage";
+import { loadGame, type SavedGame } from "@/lib/savegame";
 import GameBoardPlay from "@/components/GameBoardPlay";
 
-export default function GamePage() {
-  const [config, setConfig] = useState<GameConfig | null | undefined>(undefined);
+type Setup =
+  | { kind: "new"; config: GameConfig }
+  | { kind: "resume"; save: SavedGame }
+  | null;
+
+function GamePageInner() {
+  const params = useSearchParams();
+  const resume = params.get("resume") === "1";
+  const [setup, setSetup] = useState<Setup | undefined>(undefined);
 
   useEffect(() => {
-    setConfig(loadGameConfig());
-  }, []);
+    if (resume) {
+      const result = loadGame();
+      if (result.status === "ok") {
+        setSetup({ kind: "resume", save: result.save });
+        return;
+      }
+    }
+    const config = loadGameConfig();
+    setSetup(config ? { kind: "new", config } : null);
+  }, [resume]);
 
   const HexIslesClient = useMemo(() => {
-    if (!config) return null;
+    if (!setup) return null;
+
+    if (setup.kind === "resume") {
+      const { save } = setup;
+      const theme = getTheme(save.themeId);
+      const modes = save.playerModes;
+      const Board = (props: BoardProps<GameState>) => (
+        <GameBoardPlay {...props} theme={theme} playerModes={modes} variant={save.variant} />
+      );
+      return Client<GameState>({
+        game: createResumeGame(save.state, save.playOrderPos),
+        board: Board,
+        numPlayers: save.numPlayers,
+        debug: false,
+      });
+    }
+
+    const { config } = setup;
     const theme = getTheme(config.themeId);
-    const playerModes = config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human" as const);
+    const playerModes: PlayerMode[] =
+      config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human");
     const variant = config.variant ?? "base";
+    const difficulties = config.difficulties;
     const Board = (props: BoardProps<GameState>) => (
       <GameBoardPlay {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
-      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant),
+      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant, playerModes, difficulties),
       board: Board,
       numPlayers: config.numPlayers,
       debug: false,
     });
-  }, [config]);
+  }, [setup]);
 
-  if (config === undefined) {
+  if (setup === undefined) {
     return (
       <main className="flex min-h-dvh items-center justify-center text-ink-soft">
         Loading…
@@ -41,7 +77,7 @@ export default function GamePage() {
     );
   }
 
-  if (config === null || !HexIslesClient) {
+  if (setup === null || !HexIslesClient) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-4xl">🪬</p>
@@ -57,4 +93,18 @@ export default function GamePage() {
   }
 
   return <HexIslesClient />;
+}
+
+export default function GamePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-dvh items-center justify-center text-ink-soft">
+          Loading…
+        </main>
+      }
+    >
+      <GamePageInner />
+    </Suspense>
+  );
 }

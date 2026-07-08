@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { Board, PlayerMode } from "@/types/game";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { Board, GameVariant, PlayerMode } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
 import { createDuelBoard } from "@/game/board-generator/presets";
 import { allThemes } from "@/game/themes";
 import { saveGameConfig } from "@/lib/storage";
+import { hasSavedGame } from "@/lib/savegame";
 import HexBoard from "@/components/HexBoard";
 import {
   Card,
@@ -22,18 +23,23 @@ import {
 
 const DEFAULT_NAMES = ["Player 1", "Player 2", "Player 3", "Player 4"];
 
-export default function NewGamePage() {
+function NewGameInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  const [variant, setVariant] = useState<GameVariant>(
+    params.get("variant") === "ck" ? "cities-knights" : "base",
+  );
   const [numPlayers, setNumPlayers] = useState(3);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   const [board, setBoard] = useState<Board | null>(null);
-  const [playerModes, setPlayerModes] = useState<PlayerMode[]>(["human", "human", "bot", "bot"]);
+  const [saveExists, setSaveExists] = useState(false);
 
   useEffect(() => {
     setThemes(allThemes());
     setBoard(generateBoard());
+    setSaveExists(hasSavedGame());
   }, []);
 
   function pickPlayers(n: number) {
@@ -52,10 +58,14 @@ export default function NewGamePage() {
 
   function start() {
     if (!board) return;
+    // Pass-and-play: every seat is a human sharing this device.
+    const playerModes: PlayerMode[] = Array.from({ length: numPlayers }, () => "human");
     saveGameConfig({
       numPlayers,
       themeId,
       board,
+      variant,
+      playerModes,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
       playerModes: playerModes.slice(0, numPlayers),
       variant: "base",
@@ -65,7 +75,29 @@ export default function NewGamePage() {
 
   return (
     <Shell>
-      <TopBar title="New Journey" />
+      <TopBar title={variant === "cities-knights" ? "New · Cities & Knights" : "New Journey"} />
+
+      {saveExists && (
+        <div className="mb-4 rounded-2xl border border-rust/40 bg-rust/10 p-3 text-xs text-ink">
+          Starting a new game won&rsquo;t erase your saved game until this one is
+          saved.{" "}
+          <a href="/game?resume=1" className="font-bold text-rust underline">
+            Resume instead
+          </a>
+        </div>
+      )}
+
+      <Card className="mb-4">
+        <SectionLabel>Mode</SectionLabel>
+        <div className="grid grid-cols-2 gap-2">
+          <Chip selected={variant === "base"} onClick={() => setVariant("base")}>
+            Standard
+          </Chip>
+          <Chip selected={variant === "cities-knights"} onClick={() => setVariant("cities-knights")}>
+            Cities &amp; Knights
+          </Chip>
+        </div>
+      </Card>
 
       <Card className="mb-4">
         <SectionLabel>Players</SectionLabel>
@@ -149,5 +181,19 @@ export default function NewGamePage() {
         Start Journey
       </PrimaryButton>
     </Shell>
+  );
+}
+
+export default function NewGamePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-dvh items-center justify-center text-ink-soft">
+          Loading…
+        </main>
+      }
+    >
+      <NewGameInner />
+    </Suspense>
   );
 }

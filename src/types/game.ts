@@ -95,7 +95,15 @@ export interface PlayerState {
   victoryBonus?: number;
 }
 
-export type PlayerMode = "human" | "bot";
+export type PlayerMode = "human" | "remote" | "bot";
+export type BotDifficulty = "easy" | "normal" | "hard";
+
+export interface PlayerSetup {
+  mode: PlayerMode;
+  botDifficulty?: BotDifficulty;
+  /** Seat-specific invite shown for remote-human setup. */
+  joinCode?: string;
+}
 export type GameVariant = "base" | "cities-knights";
 
 /** The boardgame.io G object. */
@@ -109,6 +117,8 @@ export interface GameState {
   playerNames?: string[];
   /** Rules variant this match was created with. */
   variant?: GameVariant;
+  /** Per-seat control assignments for local, remote, and bot players. */
+  playerSetups?: PlayerSetup[];
   /** vertexId -> building */
   buildings: Record<string, Building>;
   /** edgeId -> player id */
@@ -155,6 +165,7 @@ export interface GameConfig {
   board: Board;
   playerNames?: string[];
   playerModes?: PlayerMode[];
+  playerSetups?: PlayerSetup[];
   variant?: GameVariant;
 }
 
@@ -162,4 +173,5 @@ export interface GameConfig {
 export interface OnlineSetupData {
   board: Board;
   themeId: string;
+  playerSetups?: PlayerSetup[];
 }

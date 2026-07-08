@@ -1,5 +1,6 @@
-import type { Board, GameConfig, PlayerMode } from "@/types/game";
+import type { Board, GameConfig } from "@/types/game";
 import { PLAYER_NAMES } from "@/game/constants";
+import { withPlayerSetups } from "@/game/player-control";
 
 const ACTIVE_GAME_KEY = "hexisles:activeGame";
 const SAVED_BOARDS_KEY = "hexisles:boards";
@@ -28,16 +29,10 @@ export function loadGameConfig(): GameConfig | null {
 function normalizeGameConfig(config: GameConfig): GameConfig {
   return {
     ...config,
-    playerModes: normalizePlayerModes(config.numPlayers, config.playerModes),
+    ...withPlayerSetups(config),
     playerNames: normalizePlayerNames(config.numPlayers, config.playerNames),
     variant: config.variant ?? "base",
   };
-}
-
-function normalizePlayerModes(numPlayers: number, modes?: PlayerMode[]): PlayerMode[] {
-  if (modes?.length === numPlayers) return modes;
-  if (numPlayers === 4) return ["human", "human", "bot", "bot"];
-  return Array.from({ length: numPlayers }, () => "human");
 }
 
 function normalizePlayerNames(numPlayers: number, names?: string[]): string[] {

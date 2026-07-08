@@ -1,5 +1,5 @@
 import type { Game } from "boardgame.io";
-import type { Board, GameState, GameVariant, OnlineSetupData } from "@/types/game";
+import type { Board, GameState, GameVariant, OnlineSetupData, PlayerSetup } from "@/types/game";
 import {
   devDeck,
   emptyCommodities,
@@ -32,6 +32,7 @@ import {
   playYearOfPlenty,
   rollDice,
 } from "./moves";
+import { normalizePlayerSetups } from "./player-control";
 
 export function setupOrder(numPlayers: number, step: number): number {
   return step < numPlayers ? step : 2 * numPlayers - 1 - step;
@@ -43,6 +44,7 @@ export function initialState(
   shuffledDeck: GameState["devDeck"],
   names?: string[],
   variant: GameVariant = "base",
+  playerSetups?: PlayerSetup[],
 ): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
@@ -70,6 +72,7 @@ export function initialState(
     names: resolvedNames,
     playerNames: resolvedNames,
     variant,
+    playerSetups: normalizePlayerSetups(numPlayers, playerSetups),
     buildings: {},
     roads: {},
     knights: {},
@@ -164,11 +167,12 @@ export function createHexIslesGame(
   numPlayers: number,
   names?: string[],
   variant: GameVariant = "base",
+  playerSetups?: PlayerSetup[],
 ): Game<GameState> {
   return {
     name: "hamsa-nomads",
     setup: ({ random }) =>
-      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant),
+      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant, playerSetups),
     endIf: END_IF,
     phases: PHASES,
   };
@@ -183,7 +187,7 @@ export const HamsaNomadsGame: Game<GameState> = {
   name: "hamsa-nomads",
   setup: ({ ctx, random }, setupData?: OnlineSetupData) => {
     const board = setupData?.board ?? generateBoard(400, () => random.Number());
-    return initialState(board, ctx.numPlayers, random.Shuffle(devDeck()));
+    return initialState(board, ctx.numPlayers, random.Shuffle(devDeck()), undefined, "base", setupData?.playerSetups);
   },
   endIf: END_IF,
   phases: PHASES,

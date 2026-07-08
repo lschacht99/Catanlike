@@ -162,11 +162,43 @@ scores hundreds of random candidates and penalizes:
 - lopsided pip totals per resource
 - the top settlement spots clustering next to each other
 
+## Multiplayer, trading & Cities & Knights
+
+- **Local pass-and-play** (2–4 humans on one device) with a **pass-the-device
+  privacy curtain** between turns — the previous player's hand and cards are
+  hidden until the named player taps "Show my turn".
+- **Player-to-player trade offers** with privacy: the proposer picks what to
+  give and request and sees only *how many* cards a rival holds — never the
+  breakdown. The receiver privately accepts/refuses (with its own handoff);
+  resources move only on acceptance. Illegal or unaffordable offers are
+  rejected by the engine.
+- **Bot trade AI** (`src/game/ai/trade.ts`): bots value needed vs surplus
+  resources, refuse deals they can't pay or that only help the leader, accept
+  fair/useful ones, with a little randomness. Results show Accepted/Refused
+  with a short reason.
+- **Cities & Knights mode** (`src/game/ck.ts`, documented in
+  `docs/cities-knights-plan.md`): commodities from cities, three city
+  improvement tracks, knights (build / activate / upgrade / deactivate), an
+  event die, a raider (barbarian) track with attack resolution, and a
+  30-card, 3-track **progress deck** with all effects implemented (original
+  names, no copied text). Win at 13 points.
+- **Save / Resume**: local games autosave at each clean turn start
+  (`src/lib/savegame.ts`, versioned). The home screen shows **Resume Game**
+  only when a valid save exists; invalid/old saves are rejected gracefully.
+- **Online multiplayer** stays honest on static hosting: without a configured
+  game server the Multiplayer hub says *"Online multiplayer requires server
+  setup"* rather than faking it. Set `NEXT_PUBLIC_GAME_SERVER` and run
+  `npm run server` to enable the built-in lobby (Create · Join · Waiting Room).
+- **Home entry points**: Standard, Cities & Knights, Multiplayer, Custom
+  Map/Theme, Resume (conditional), Rules — each a distinct, tappable card with
+  lazy-loaded, fallback-safe placeholder art (`public/assets`, `SafeImage`).
+- **Landscape layout**: the game screen flips to board-left / controls-rail
+  on landscape phones and tablets, with no horizontal overflow.
+
 ## Roadmap (scaffolded, not built)
 
 - Ports / harbor trading (3:1, 2:1)
-- Player-to-player trade offers
 - Discard-half on a 7
-- Hidden opponent hands online (boardgame.io playerView)
-- In-progress game persistence across refreshes
+- Hidden opponent hands online (boardgame.io playerView / secret state)
+- Metropolis pieces & city walls for Cities & Knights
 - AI tile art from each theme's `tilePrompt`

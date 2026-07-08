@@ -12,12 +12,21 @@ export type ProgressTrackKey = (typeof PROGRESS_TRACK_KEYS)[number];
 export type ProgressTrackCounts = Record<ProgressTrackKey, number>;
 
 export type ProgressCardType =
-  | "roadworks"
+  // trade (cloth)
   | "harvest"
-  | "oreRush"
   | "merchant"
+  | "caravan"
+  | "marketDay"
+  // politics (coin)
   | "diplomat"
-  | "invention";
+  | "warlord"
+  | "intrigue"
+  | "levy"
+  // science (book)
+  | "roadworks"
+  | "invention"
+  | "oreRush"
+  | "scholar";
 
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
@@ -120,9 +129,13 @@ export interface GameState {
   knights: Record<string, string>;
   /** vertexId -> active knight flag */
   activeKnights?: Record<string, boolean>;
+  /** vertexId -> knight strength (1 basic, 2 strong). Missing = 1. */
+  knightLevels?: Record<string, number>;
   barbarianPosition?: number;
   lastEventDie?: "barbarian" | ProgressTrackKey | null;
   progressDeck?: ProgressCardType[];
+  /** Per-track draw piles (trade / politics / science). */
+  progressDecks?: Record<ProgressTrackKey, ProgressCardType[]>;
   progressDiscards?: ProgressCardType[];
   /** Tile id the bandit currently occupies. */
   banditTile: number;
@@ -145,8 +158,37 @@ export interface GameState {
   freeRoads: number;
   /** Only one development card may be played per turn. */
   playedDevCardThisTurn: boolean;
+  /** Bank trade rate for the current turn (Merchant card lowers it). */
+  tradeRate?: number;
+  /** Player-to-player trade offer awaiting the target's response. */
+  pendingTrade?: TradeOffer | null;
+  /** Outcome of the last resolved offer, for both parties to read. */
+  lastTradeResult?: TradeResult | null;
+  /** Player modes so the engine can auto-resolve offers made to bots. */
+  playerModes?: PlayerMode[];
   /** Human-readable event feed (most recent last). */
   log: string[];
+}
+
+/** A proposed player-to-player exchange. Amounts only — never hands. */
+export interface TradeOffer {
+  from: string;
+  to: string;
+  /** What the proposer hands over. */
+  give: ResourceKey;
+  giveAmount: number;
+  /** What the proposer asks for in return. */
+  receive: ResourceKey;
+  receiveAmount: number;
+}
+
+export interface TradeResult {
+  offer: TradeOffer;
+  accepted: boolean;
+  /** Short human-readable reason (mostly for bot refusals). */
+  reason?: string;
+  /** True when a bot answered (no privacy handoff needed). */
+  respondedByBot?: boolean;
 }
 
 /** Saved in localStorage to configure the next local game. */

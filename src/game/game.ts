@@ -11,23 +11,62 @@ import {
   buildRoad,
   buildSettlement,
   buyDevCard,
+  cancelTrade,
+  clearTradeResult,
+  deactivateKnight,
   endTurn,
   improveCity,
   moveBandit,
   placeRoad,
   placeSettlement,
-  playerTrade,
+  proposeTrade,
+  respondTrade,
   playKnight,
   playMonopoly,
   playProgressCard,
   playRoadBuilding,
   playYearOfPlenty,
   rollDice,
+  upgradeKnight,
 } from "./moves";
 
 export function setupOrder(numPlayers: number, step: number): number {
   return step < numPlayers ? step : 2 * numPlayers - 1 - step;
 }
+
+/** Every move available during the play phase (shared by new & resumed games). */
+const PLAY_MOVES = {
+  rollDice,
+  moveBandit,
+  buildRoad,
+  buildSettlement,
+  buildCity,
+  bankTrade,
+  buyDevCard,
+  playKnight,
+  playRoadBuilding,
+  playYearOfPlenty,
+  playMonopoly,
+  proposeTrade,
+  respondTrade,
+  cancelTrade,
+  clearTradeResult,
+  buildKnight,
+  activateKnight,
+  deactivateKnight,
+  upgradeKnight,
+  improveCity,
+  playProgressCard,
+  endTurn,
+} as const;
+
+const RESET_TURN = ({ G }: { G: GameState }) => {
+  G.hasRolled = false;
+  G.lastRoll = null;
+  G.mustMoveBandit = false;
+  G.freeRoads = 0;
+  G.playedDevCardThisTurn = false;
+};
 
 export function initialState(
   board: Board,
@@ -35,6 +74,7 @@ export function initialState(
   shuffledDeck: GameState["devDeck"],
   names?: string[],
   variant: GameVariant = "base",
+  playerModes?: GameState["playerModes"],
 ): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
@@ -55,13 +95,18 @@ export function initialState(
     players,
     names: resolvedNames,
     playerNames: resolvedNames,
+    playerModes,
     variant,
     buildings: {},
     roads: {},
     knights: {},
     activeKnights: {},
+    knightLevels: {},
     barbarianPosition: 0,
     lastEventDie: null,
+    pendingTrade: null,
+    lastTradeResult: null,
+    tradeRate: 4,
     progressDeck: [...PROGRESS_DECK],
     progressDiscards: [],
     banditTile: desert ? desert.id : -1,
@@ -98,25 +143,7 @@ const PHASES: Game<GameState>["phases"] = {
   },
 
   play: {
-    moves: {
-      rollDice,
-      moveBandit,
-      buildRoad,
-      buildSettlement,
-      buildCity,
-      bankTrade,
-      buyDevCard,
-      playKnight,
-      playRoadBuilding,
-      playYearOfPlenty,
-      playMonopoly,
-      playerTrade,
-      buildKnight,
-      activateKnight,
-      improveCity,
-      playProgressCard,
-      endTurn,
-    },
+    moves: PLAY_MOVES,
     turn: {
       // The first placer also takes the first turn, regardless of where the
       // setup snake left the play order.
@@ -124,13 +151,7 @@ const PHASES: Game<GameState>["phases"] = {
         first: () => 0,
         next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,
       },
-      onBegin: ({ G }) => {
-        G.hasRolled = false;
-        G.lastRoll = null;
-        G.mustMoveBandit = false;
-        G.freeRoads = 0;
-        G.playedDevCardThisTurn = false;
-      },
+      onBegin: RESET_TURN,
     },
   },
 };
@@ -149,13 +170,44 @@ export function createHexIslesGame(
   numPlayers: number,
   names?: string[],
   variant: GameVariant = "base",
+  playerModes?: GameState["playerModes"],
 ): Game<GameState> {
   return {
     name: "hamsa-nomads",
     setup: ({ random }) =>
-      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant),
+      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant, playerModes),
     endIf: END_IF,
     phases: PHASES,
+  };
+}
+
+/**
+ * Resume a saved game. The persisted `G` snapshot is replayed as the initial
+ * state of a single play phase that begins with the player whose turn it was.
+ * The setup phase is intentionally skipped — snapshots are only taken during
+ * play, so all buildings/roads already exist in `G`.
+ */
+export function createResumeGame(
+  savedG: GameState,
+  startPlayOrderPos: number,
+): Game<GameState> {
+  return {
+    name: "hamsa-nomads",
+    setup: () => savedG,
+    endIf: END_IF,
+    phases: {
+      play: {
+        start: true,
+        moves: PLAY_MOVES,
+        turn: {
+          order: {
+            first: () => startPlayOrderPos % Math.max(1, savedG.numPlayers),
+            next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,
+          },
+          onBegin: RESET_TURN,
+        },
+      },
+    },
   };
 }
 

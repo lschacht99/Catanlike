@@ -87,18 +87,79 @@ export const TRACK_COMMODITY: Record<ProgressTrackKey, CommodityKey> = {
 };
 
 export const PROGRESS_CARD_LABELS: Record<ProgressCardType, string> = {
+  harvest: "Harvest Festival",
+  merchant: "Master Trader",
+  caravan: "Caravan",
+  marketDay: "Market Day",
+  diplomat: "Envoy",
+  warlord: "Warlord",
+  intrigue: "Intrigue",
+  levy: "Levy",
   roadworks: "Roadworks",
-  harvest: "Harvest",
-  oreRush: "Ore Rush",
-  merchant: "Merchant",
-  diplomat: "Diplomat",
   invention: "Invention",
+  oreRush: "Deep Shafts",
+  scholar: "Scholars",
 };
 
+/** Original short effect text — never copied from any rulebook. */
+export const PROGRESS_CARD_DESCRIPTIONS: Record<ProgressCardType, string> = {
+  harvest: "Gain 1 grain and 1 wool.",
+  merchant: "Bank trades cost 2 instead of 4 for the rest of this turn.",
+  caravan: "Gain any 2 resources of your choice.",
+  marketDay: "Gain 1 commodity of your choice plus 1 cloth.",
+  diplomat: "Move the bandit and steal from a neighbor.",
+  warlord: "Activate all of your knights for free.",
+  intrigue: "Steal 1 random resource from a chosen rival.",
+  levy: "Each rival gives you 1 random resource.",
+  roadworks: "Build 2 roads for free.",
+  invention: "Gain 1 resource of your choice plus 1 book.",
+  oreRush: "Gain 2 ore.",
+  scholar: "Gain 2 commodities of your choice.",
+};
+
+export const PROGRESS_CARD_TRACK: Record<ProgressCardType, ProgressTrackKey> = {
+  harvest: "trade",
+  merchant: "trade",
+  caravan: "trade",
+  marketDay: "trade",
+  diplomat: "politics",
+  warlord: "politics",
+  intrigue: "politics",
+  levy: "politics",
+  roadworks: "science",
+  invention: "science",
+  oreRush: "science",
+  scholar: "science",
+};
+
+/** Per-track deck composition (10 cards each, 30 total). */
+export const PROGRESS_DECK_COMPOSITION: Record<ProgressTrackKey, Partial<Record<ProgressCardType, number>>> = {
+  trade: { harvest: 3, merchant: 2, caravan: 3, marketDay: 2 },
+  politics: { diplomat: 3, warlord: 2, intrigue: 3, levy: 2 },
+  science: { roadworks: 3, invention: 3, oreRush: 2, scholar: 2 },
+};
+
+export function progressDeckFor(track: ProgressTrackKey): ProgressCardType[] {
+  const deck: ProgressCardType[] = [];
+  for (const [card, count] of Object.entries(PROGRESS_DECK_COMPOSITION[track])) {
+    for (let i = 0; i < (count ?? 0); i++) deck.push(card as ProgressCardType);
+  }
+  return deck;
+}
+
+/** Legacy flat deck (kept for old saved states). */
 export const PROGRESS_DECK: ProgressCardType[] = [
-  "roadworks", "roadworks", "harvest", "harvest", "oreRush", "oreRush",
-  "merchant", "merchant", "diplomat", "diplomat", "invention", "invention",
+  ...progressDeckFor("trade"),
+  ...progressDeckFor("politics"),
+  ...progressDeckFor("science"),
 ];
+
+/** A player may hold at most this many progress cards. */
+export const PROGRESS_HAND_LIMIT = 4;
+
+/** Upgrading a basic knight to a strong knight (level 2). */
+export const KNIGHT_UPGRADE_COST: Partial<ResourceCounts> = { wool: 1, ore: 1 };
+export const KNIGHT_MAX_LEVEL = 2;
 
 export function emptyResources(): ResourceCounts {
   return { wood: 0, brick: 0, grain: 0, wool: 0, ore: 0 };

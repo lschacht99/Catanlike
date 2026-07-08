@@ -12,17 +12,27 @@ import type {
 import {
   BANK_TRADE_RATE,
   BUILD_COSTS,
+  COMMODITY_FROM_RESOURCE,
   DEV_CARD_COST,
   emptyCommodities,
   emptyImprovements,
+  KNIGHT_MAX_LEVEL,
+  KNIGHT_UPGRADE_COST,
   PIECE_LIMITS,
+  PROGRESS_CARD_LABELS,
   PROGRESS_DECK,
+  TRACK_COMMODITY,
   totalResources,
 } from "./constants";
 import {
+  advanceBarbarians,
+  eventFromDie,
+  runProgressEvent,
+} from "./ck";
+import { evaluateTradeOffer } from "./ai/trade";
+import {
   banditVictims,
   canAfford,
-  canBankTrade,
   canBuyDevCard,
   canPayCost,
   getGeometry,
@@ -41,6 +51,7 @@ const TRACKS: ProgressTrackKey[] = ["trade", "politics", "science"];
 
 function ensureCkState(G: GameState): void {
   G.activeKnights ??= {};
+  G.knightLevels ??= {};
   G.barbarianPosition ??= 0;
   G.lastEventDie ??= null;
   G.progressDeck ??= [...PROGRESS_DECK];
@@ -75,6 +86,8 @@ function log(G: GameState, message: string): void {
 function name(G: GameState, id: string): string {
   return G.names[Number(id)] ?? `Player ${Number(id) + 1}`;
 }
+/** Alias used by the Cities & Knights move handlers. */
+const playerName = name;
 
 function distribute(G: GameState, roll: number): void {
   ensureCkState(G);
@@ -85,16 +98,27 @@ function distribute(G: GameState, roll: number): void {
       .map((t) => [t.id, t.resource as ResourceKey]),
   );
   if (producing.size === 0) return;
+  const ck = G.variant === "cities-knights";
   for (const vertex of Object.values(geo.vertices)) {
     const building = G.buildings[vertex.id];
     if (!building) continue;
     for (const tileId of vertex.tiles) {
       const resource = producing.get(tileId);
       if (!resource) continue;
-      const amount = building.city ? 2 : 1;
-      G.players[building.player].resources[resource] += amount;
       const gains = (G.lastGains[building.player] ??= {});
-      gains[resource] = (gains[resource] ?? 0) + amount;
+      // Cities & Knights: a city on a commodity terrain (ore/wool/wood)
+      // makes 1 resource + 1 commodity; on grain/brick it makes 2 resources.
+      // Settlements always make 1 resource. Base game: settlement 1, city 2.
+      const commodity = ck ? COMMODITY_FROM_RESOURCE[resource] : undefined;
+      if (building.city && ck && commodity) {
+        G.players[building.player].resources[resource] += 1;
+        G.players[building.player].commodities[commodity] += 1;
+        gains[resource] = (gains[resource] ?? 0) + 1;
+      } else {
+        const amount = building.city ? 2 : 1;
+        G.players[building.player].resources[resource] += amount;
+        gains[resource] = (gains[resource] ?? 0) + amount;
+      }
     }
   }
 }
@@ -136,11 +160,25 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
   G.hasRolled = true;
   G.lastRoll = dice;
   G.lastGains = {};
+  G.tradeRate = BANK_TRADE_RATE;
   log(G, `${name(G, playerID!)} rolled ${sum}.`);
   if (sum === 7) {
     G.mustMoveBandit = true;
   } else {
     distribute(G, sum);
+  }
+
+  // Cities & Knights: also roll the event die and resolve its effect.
+  if (G.variant === "cities-knights") {
+    const face = random.D6() as number;
+    const event = eventFromDie(face);
+    G.lastEventDie = event;
+    const rng = () => random.Number();
+    if (event === "barbarian") {
+      for (const line of advanceBarbarians(G, rng)) log(G, line);
+    } else {
+      for (const line of runProgressEvent(G, event, rng)) log(G, line);
+    }
   }
 };
 
@@ -237,6 +275,32 @@ export const activateKnight: Move<GameState> = ({ G, playerID }, vertexId?: stri
   log(G, `${playerName(G, player)} activated a knight.`);
 };
 
+export const deactivateKnight: Move<GameState> = ({ G, playerID }, vertexId?: string) => {
+  ensureCkState(G);
+  const player = playerID!;
+  if (G.variant !== "cities-knights") return INVALID_MOVE;
+  const id = vertexId ?? Object.entries(G.knights).find(([k, owner]) => owner === player && G.activeKnights[k])?.[0];
+  if (!id || G.knights[id] !== player || !G.activeKnights[id]) return INVALID_MOVE;
+  G.activeKnights[id] = false;
+  log(G, `${playerName(G, player)} stood a knight down.`);
+};
+
+export const upgradeKnight: Move<GameState> = ({ G, playerID }, vertexId?: string) => {
+  ensureCkState(G);
+  const player = playerID!;
+  if (G.variant !== "cities-knights") return INVALID_MOVE;
+  if (!requireRolled(G)) return INVALID_MOVE;
+  const id = vertexId ?? Object.entries(G.knights).find(
+    ([k, owner]) => owner === player && (G.knightLevels[k] ?? 1) < KNIGHT_MAX_LEVEL,
+  )?.[0];
+  if (!id || G.knights[id] !== player) return INVALID_MOVE;
+  if ((G.knightLevels[id] ?? 1) >= KNIGHT_MAX_LEVEL) return INVALID_MOVE;
+  if (!canPayCost(G.players[player].resources, KNIGHT_UPGRADE_COST)) return INVALID_MOVE;
+  pay(G.players[player].resources, KNIGHT_UPGRADE_COST);
+  G.knightLevels[id] = (G.knightLevels[id] ?? 1) + 1;
+  log(G, `${playerName(G, player)} upgraded a knight to strength ${G.knightLevels[id]}.`);
+};
+
 export const improveCity: Move<GameState> = ({ G, playerID }, track: ProgressTrackKey) => {
   ensureCkState(G);
   const player = playerID!;
@@ -253,7 +317,19 @@ export const improveCity: Move<GameState> = ({ G, playerID }, track: ProgressTra
   log(G, `${playerName(G, player)} improved ${track} to level ${current + 1}.`);
 };
 
-export const playProgressCard: Move<GameState> = ({ G, playerID }, card: ProgressCardType) => {
+/**
+ * Play a progress card. `choice` carries any picks the card needs
+ * (resources / commodities / a target rival) so effects fully resolve.
+ */
+export const playProgressCard: Move<GameState> = (
+  { G, playerID, random },
+  card: ProgressCardType,
+  choice?: {
+    resources?: ResourceKey[];
+    commodities?: CommodityKey[];
+    target?: string;
+  },
+) => {
   ensureCkState(G);
   const player = playerID!;
   if (G.variant !== "cities-knights") return INVALID_MOVE;
@@ -261,27 +337,88 @@ export const playProgressCard: Move<GameState> = ({ G, playerID }, card: Progres
   const hand = G.players[player].progressCards;
   const index = hand.indexOf(card);
   if (index < 0) return INVALID_MOVE;
+
+  const res = G.players[player].resources;
+  const com = G.players[player].commodities;
+  const pick = choice ?? {};
+  const gainResources = (keys: ResourceKey[], n: number) => {
+    const chosen = keys.slice(0, n);
+    if (chosen.length < n || chosen.some((k) => !RESOURCES.includes(k))) return false;
+    for (const k of chosen) res[k] += 1;
+    return true;
+  };
+  const gainCommodities = (keys: CommodityKey[], n: number) => {
+    const chosen = keys.slice(0, n);
+    const valid = (["coin", "cloth", "book"] as CommodityKey[]);
+    if (chosen.length < n || chosen.some((k) => !valid.includes(k))) return false;
+    for (const k of chosen) com[k] += 1;
+    return true;
+  };
+
+  // Validate choice-dependent cards BEFORE removing the card from hand.
+  switch (card) {
+    case "caravan":
+      if (!gainResources(pick.resources ?? [], 2)) return INVALID_MOVE;
+      break;
+    case "invention":
+      if (!gainResources(pick.resources ?? [], 1)) return INVALID_MOVE;
+      com.book += 1;
+      break;
+    case "marketDay":
+      if (!gainCommodities(pick.commodities ?? [], 1)) return INVALID_MOVE;
+      com.cloth += 1;
+      break;
+    case "scholar":
+      if (!gainCommodities(pick.commodities ?? [], 2)) return INVALID_MOVE;
+      break;
+    case "harvest":
+      res.grain += 1;
+      res.wool += 1;
+      break;
+    case "oreRush":
+      res.ore += 2;
+      break;
+    case "roadworks":
+      G.freeRoads = Math.max(G.freeRoads, 2);
+      break;
+    case "merchant":
+      G.tradeRate = 2;
+      break;
+    case "warlord":
+      for (const [k, owner] of Object.entries(G.knights)) {
+        if (owner === player) G.activeKnights[k] = true;
+      }
+      break;
+    case "diplomat":
+      G.mustMoveBandit = true;
+      break;
+    case "intrigue": {
+      const target = pick.target;
+      if (!target || target === player || !G.players[target]) return INVALID_MOVE;
+      const pool = RESOURCES.flatMap((r) => Array(G.players[target].resources[r]).fill(r));
+      if (pool.length > 0) {
+        const stolen = pool[Math.floor(random.Number() * pool.length)];
+        G.players[target].resources[stolen] -= 1;
+        res[stolen] += 1;
+      }
+      break;
+    }
+    case "levy":
+      for (const [id, p] of Object.entries(G.players)) {
+        if (id === player) continue;
+        const pool = RESOURCES.flatMap((r) => Array(p.resources[r]).fill(r));
+        if (pool.length === 0) continue;
+        const taken = pool[Math.floor(random.Number() * pool.length)];
+        p.resources[taken] -= 1;
+        res[taken] += 1;
+      }
+      break;
+    default:
+      return INVALID_MOVE;
+  }
+
   hand.splice(index, 1);
   G.progressDiscards.push(card);
-
-  if (card === "roadworks") {
-    G.players[player].resources.wood += 1;
-    G.players[player].resources.brick += 1;
-  } else if (card === "harvest") {
-    G.players[player].resources.grain += 1;
-    G.players[player].resources.wool += 1;
-  } else if (card === "oreRush") {
-    G.players[player].resources.ore += 2;
-  } else if (card === "merchant") {
-    G.players[player].commodities.coin += 1;
-    G.players[player].commodities.cloth += 1;
-  } else if (card === "diplomat") {
-    G.players[player].resources.wood += 1;
-    G.players[player].resources.brick += 1;
-  } else if (card === "invention") {
-    G.players[player].resources.grain += 1;
-    G.players[player].commodities.book += 1;
-  }
   log(G, `${playerName(G, player)} played ${PROGRESS_CARD_LABELS[card]}.`);
 };
 
@@ -290,10 +427,11 @@ export const bankTrade: Move<GameState> = ({ G, playerID }, give: ResourceKey, r
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   const hand = G.players[player].resources;
-  if (!canBankTrade(hand, give, receive)) return INVALID_MOVE;
-  hand[give] -= BANK_TRADE_RATE;
+  const rate = G.tradeRate ?? BANK_TRADE_RATE;
+  if (give === receive || hand[give] < rate) return INVALID_MOVE;
+  hand[give] -= rate;
   hand[receive] += 1;
-  log(G, `${name(G, player)} traded ${BANK_TRADE_RATE} ${give} for 1 ${receive}.`);
+  log(G, `${name(G, player)} traded ${rate} ${give} for 1 ${receive}.`);
 };
 
 // ---------------------------------------------------------------------------
@@ -377,8 +515,27 @@ export const playMonopoly: Move<GameState> = (
 };
 
 /** Direct trade between the current player and a chosen rival. */
-export const playerTrade: Move<GameState> = (
-  { G, playerID },
+/**
+ * Settle an accepted offer by moving resources. Assumes both sides can pay;
+ * callers validate first. Kept internal so accept paths share one code path.
+ */
+function settleTrade(G: GameState, offer: import("@/types/game").TradeOffer): void {
+  const proposer = G.players[offer.from].resources;
+  const responder = G.players[offer.to].resources;
+  proposer[offer.give] -= offer.giveAmount;
+  responder[offer.give] += offer.giveAmount;
+  responder[offer.receive] -= offer.receiveAmount;
+  proposer[offer.receive] += offer.receiveAmount;
+}
+
+/**
+ * Propose a player-to-player trade. Only the proposer's own ability to pay is
+ * checked here — the proposer must NOT be able to gate on the target's hand.
+ * If the target is a bot, the offer is evaluated and resolved immediately;
+ * otherwise it is parked in `G.pendingTrade` for a private human response.
+ */
+export const proposeTrade: Move<GameState> = (
+  { G, playerID, random },
   targetPlayer: string,
   give: ResourceKey,
   giveAmount: number,
@@ -388,22 +545,76 @@ export const playerTrade: Move<GameState> = (
   ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
+  if (G.pendingTrade) return INVALID_MOVE;
   if (targetPlayer === player || !G.players[targetPlayer]) return INVALID_MOVE;
   if (!RESOURCES.includes(give) || !RESOURCES.includes(receive)) return INVALID_MOVE;
   if (give === receive) return INVALID_MOVE;
   if (!Number.isInteger(giveAmount) || !Number.isInteger(receiveAmount)) return INVALID_MOVE;
   if (giveAmount < 1 || receiveAmount < 1) return INVALID_MOVE;
-  const mine = G.players[player].resources;
-  const theirs = G.players[targetPlayer].resources;
-  if (mine[give] < giveAmount || theirs[receive] < receiveAmount) return INVALID_MOVE;
-  mine[give] -= giveAmount;
-  theirs[give] += giveAmount;
-  theirs[receive] -= receiveAmount;
-  mine[receive] += receiveAmount;
-  log(
-    G,
-    `${name(G, player)} traded ${giveAmount} ${give} to ${name(G, targetPlayer)} for ${receiveAmount} ${receive}.`,
-  );
+  if (G.players[player].resources[give] < giveAmount) return INVALID_MOVE;
+
+  const offer = { from: player, to: targetPlayer, give, giveAmount, receive, receiveAmount };
+  const targetIsBot = (G.playerModes ?? [])[Number(targetPlayer)] === "bot";
+
+  if (targetIsBot) {
+    const evalResult = evaluateTradeOffer(G, offer, () => random.Number());
+    const canPay = G.players[targetPlayer].resources[receive] >= receiveAmount;
+    const accepted = canPay && evalResult.accept;
+    if (accepted) settleTrade(G, offer);
+    G.lastTradeResult = {
+      offer,
+      accepted,
+      reason: canPay ? evalResult.reason : "Not enough resources to pay.",
+      respondedByBot: true,
+    };
+    log(
+      G,
+      `${name(G, targetPlayer)} ${accepted ? "accepted" : "refused"} a trade from ${name(G, player)}.`,
+    );
+    return;
+  }
+
+  G.pendingTrade = offer;
+  G.lastTradeResult = null;
+  log(G, `${name(G, player)} proposed a trade to ${name(G, targetPlayer)}.`);
+};
+
+/** The target of a pending human trade accepts or refuses it. */
+export const respondTrade: Move<GameState> = ({ G, playerID }, accept: boolean) => {
+  ensureCkState(G);
+  const offer = G.pendingTrade;
+  if (!offer) return INVALID_MOVE;
+  // Pass-and-play uses a single seat-less client (playerID null); the UI gates
+  // who answers. Online: only the addressed player (or proposer) may respond.
+  if (playerID != null && playerID !== offer.to && playerID !== offer.from) {
+    return INVALID_MOVE;
+  }
+  if (playerID === offer.from && accept) return INVALID_MOVE;
+
+  const canPay = G.players[offer.to].resources[offer.receive] >= offer.receiveAmount &&
+    G.players[offer.from].resources[offer.give] >= offer.giveAmount;
+  const accepted = accept && canPay;
+  if (accepted) settleTrade(G, offer);
+  G.pendingTrade = null;
+  G.lastTradeResult = {
+    offer,
+    accepted,
+    reason: accept && !canPay ? "Resources changed — trade void." : undefined,
+  };
+  log(G, `${name(G, offer.to)} ${accepted ? "accepted" : "declined"} the trade.`);
+};
+
+/** Proposer cancels an outstanding offer. */
+export const cancelTrade: Move<GameState> = ({ G, playerID }) => {
+  ensureCkState(G);
+  if (!G.pendingTrade) return INVALID_MOVE;
+  if (playerID != null && G.pendingTrade.from !== playerID) return INVALID_MOVE;
+  G.pendingTrade = null;
+};
+
+/** Dismiss the last trade result banner (both parties). */
+export const clearTradeResult: Move<GameState> = ({ G }) => {
+  G.lastTradeResult = null;
 };
 
 export const endTurn: Move<GameState> = ({ G, events, playerID }) => {

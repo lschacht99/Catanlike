@@ -29,7 +29,6 @@ interface TradePanelProps {
     receive: ResourceKey,
     receiveAmount: number,
   ) => void;
-  onClose: () => void;
 }
 
 type TradeMode = "bank" | "player";
@@ -43,9 +42,8 @@ export default function TradePanel({
   rivals = [],
   onTrade,
   onPlayerTrade,
-  onClose,
 }: TradePanelProps) {
-  const [mode, setMode] = useState<TradeMode>("bank");
+  const [mode, setMode] = useState<"bank" | "player">("bank");
   const [give, setGive] = useState<ResourceKey | null>(null);
   const [receive, setReceive] = useState<ResourceKey | null>(null);
   const [targetPlayer, setTargetPlayer] = useState<string | null>(null);
@@ -119,6 +117,7 @@ export default function TradePanel({
     max: number;
     label: string;
   }) {
+    const safeMax = Math.max(1, max);
     return (
       <div className="flex items-center gap-2">
         <button
@@ -149,15 +148,15 @@ export default function TradePanel({
               { id: "bank", label: "Market Gate" },
               { id: "player", label: "With Players" },
             ] as const
-          ).map((t) => (
+          ).map((tab) => (
             <button
-              key={t.id}
-              onClick={() => setMode(t.id)}
+              key={tab.id}
+              onClick={() => setMode(tab.id)}
               className={`rounded-full py-2 text-xs font-bold uppercase tracking-[0.15em] ${
-                mode === t.id ? "bg-ink text-cream" : "text-ink-soft"
+                mode === tab.id ? "bg-ink text-cream" : "text-ink-soft"
               }`}
             >
-              {t.label}
+              {tab.label}
             </button>
           ))}
         </div>

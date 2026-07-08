@@ -1,6 +1,13 @@
 import type { Game } from "boardgame.io";
 import type { Board, GameState, GameVariant, OnlineSetupData } from "@/types/game";
-import { devDeck, emptyResources, PLAYER_NAMES, PROGRESS_DECK } from "./constants";
+import {
+  devDeck,
+  emptyCommodities,
+  emptyImprovements,
+  emptyResources,
+  PLAYER_NAMES,
+  PROGRESS_DECK,
+} from "./constants";
 import { generateBoard } from "./generator";
 import { winner } from "./scoring";
 import {
@@ -83,13 +90,19 @@ export function initialState(
       resources: emptyResources(),
       devCards: [],
       knightsPlayed: 0,
+      commodities: emptyCommodities(),
+      improvements: emptyImprovements(),
+      progressCards: [],
+      victoryBonus: 0,
     };
   }
-  const desert = board.tiles.find((t) => t.resource === "desert");
+
   const resolvedNames =
     names && names.length === numPlayers
       ? names
-      : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i]);
+      : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i] ?? `Player ${i + 1}`);
+  const desert = board.tiles.find((t) => t.resource === "desert");
+
   return {
     numPlayers,
     board,
@@ -147,8 +160,6 @@ const PHASES: Game<GameState>["phases"] = {
   play: {
     moves: PLAY_MOVES,
     turn: {
-      // The first placer also takes the first turn, regardless of where the
-      // setup snake left the play order.
       order: {
         first: () => 0,
         next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,

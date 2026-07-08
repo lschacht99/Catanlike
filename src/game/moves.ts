@@ -1,7 +1,14 @@
 // @ts-nocheck
 import { INVALID_MOVE } from "boardgame.io/core";
 import type { Move } from "boardgame.io";
-import type { GameState, ProgressCardType, ProgressTrackKey, ResourceCounts, ResourceKey } from "@/types/game";
+import type {
+  CommodityKey,
+  GameState,
+  ProgressCardType,
+  ProgressTrackKey,
+  ResourceCounts,
+  ResourceKey,
+} from "@/types/game";
 import {
   BANK_TRADE_RATE,
   BUILD_COSTS,
@@ -27,6 +34,7 @@ import {
   banditVictims,
   canAfford,
   canBuyDevCard,
+  canPayCost,
   getGeometry,
   pieceCounts,
   playableDevCardIndex,
@@ -41,24 +49,18 @@ import { updateLargestArmy, updateLongestRoad } from "./scoring";
 const RESOURCES: ResourceKey[] = ["wood", "brick", "grain", "wool", "ore"];
 const TRACKS: ProgressTrackKey[] = ["trade", "politics", "science"];
 
-function ensureExpandedState(G: GameState): void {
-  G.knights ??= {};
+function ensureCkState(G: GameState): void {
   G.activeKnights ??= {};
   G.knightLevels ??= {};
   G.barbarianPosition ??= 0;
   G.lastEventDie ??= null;
   G.progressDeck ??= [...PROGRESS_DECK];
   G.progressDiscards ??= [];
-  G.lastGains ??= {};
-  G.freeRoads ??= 0;
-  G.playedDevCardThisTurn ??= false;
   for (const p of Object.values(G.players)) {
     p.commodities ??= emptyCommodities();
     p.improvements ??= emptyImprovements();
     p.progressCards ??= [];
     p.victoryBonus ??= 0;
-    p.devCards ??= [];
-    p.knightsPlayed ??= 0;
   }
 }
 
@@ -68,36 +70,27 @@ function pay(resources: ResourceCounts, cost: Partial<ResourceCounts>): void {
   }
 }
 
+function payCommodity(G: GameState, player: string, commodity: CommodityKey, amount: number): boolean {
+  ensureCkState(G);
+  const purse = G.players[player].commodities;
+  if (purse[commodity] < amount) return false;
+  purse[commodity] -= amount;
+  return true;
+}
+
 function log(G: GameState, message: string): void {
   G.log.push(message);
   if (G.log.length > 40) G.log.shift();
 }
 
 function name(G: GameState, id: string): string {
-  return (G.playerNames ?? G.names)[Number(id)] ?? `Player ${Number(id) + 1}`;
-}
-
-function requireRolled(G: GameState): boolean {
-  return G.hasRolled && !G.mustMoveBandit;
-}
-
-function drawProgressCard(G: GameState, player: string, random?: { Number: () => number }): void {
-  ensureExpandedState(G);
-  if (G.progressDeck.length === 0) {
-    G.progressDeck = G.progressDiscards.length ? [...G.progressDiscards] : [...PROGRESS_DECK];
-    G.progressDiscards = [];
-  }
-  if (!G.progressDeck.length) return;
-  const index = random ? Math.floor(random.Number() * G.progressDeck.length) : 0;
-  const [card] = G.progressDeck.splice(index, 1);
-  G.players[player].progressCards.push(card);
-  log(G, `${name(G, player)} drew ${PROGRESS_CARD_LABELS[card]}.`);
+  return G.names[Number(id)] ?? `Player ${Number(id) + 1}`;
 }
 /** Alias used by the Cities & Knights move handlers. */
 const playerName = name;
 
 function distribute(G: GameState, roll: number): void {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const geo = getGeometry(G.board);
   const producing = new Map(
     G.board.tiles
@@ -131,7 +124,7 @@ function distribute(G: GameState, roll: number): void {
 }
 
 export const placeSettlement: Move<GameState> = ({ G, playerID }, vertexId: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (G.pendingSetupSettlement !== null) return INVALID_MOVE;
   if (!validSettlementSpots(G, player, true).includes(vertexId)) return INVALID_MOVE;
@@ -154,7 +147,7 @@ export const placeSettlement: Move<GameState> = ({ G, playerID }, vertexId: stri
 };
 
 export const placeRoad: Move<GameState> = ({ G, events, playerID }, edgeId: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (G.pendingSetupSettlement === null) return INVALID_MOVE;
   if (!validRoadSpots(G, player, true).includes(edgeId)) return INVALID_MOVE;
@@ -166,7 +159,7 @@ export const placeRoad: Move<GameState> = ({ G, events, playerID }, edgeId: stri
 };
 
 export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   if (G.hasRolled) return INVALID_MOVE;
   const dice = random.D6(2) as [number, number];
   const sum = dice[0] + dice[1];
@@ -175,23 +168,10 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
   G.lastGains = {};
   G.tradeRate = BANK_TRADE_RATE;
   log(G, `${name(G, playerID!)} rolled ${sum}.`);
-
-  if (G.variant === "cities-knights") {
-    const event = random.D6();
-    if (event <= 3) {
-      G.lastEventDie = "barbarian";
-      G.barbarianPosition = Math.min(7, (G.barbarianPosition ?? 0) + 1);
-      log(G, `Raiders advanced to ${G.barbarianPosition}/7.`);
-      if (G.barbarianPosition >= 7) {
-        for (const id of Object.keys(G.activeKnights ?? {})) G.activeKnights[id] = false;
-        G.barbarianPosition = 0;
-        log(G, "Raiders arrived. Active scouts return to camp.");
-      }
-    } else {
-      const track = TRACKS[event - 4];
-      G.lastEventDie = track;
-      if ((G.players[playerID!].improvements?.[track] ?? 0) > 0) drawProgressCard(G, playerID!, random);
-    }
+  if (sum === 7) {
+    G.mustMoveBandit = true;
+  } else {
+    distribute(G, sum);
   }
 
   // Cities & Knights: the third (event) die resolves after production. The
@@ -210,15 +190,19 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
   }
 };
 
-export const moveBandit: Move<GameState> = ({ G, playerID, random }, tileId: number, victimId?: string) => {
-  ensureExpandedState(G);
+export const moveBandit: Move<GameState> = (
+  { G, playerID, random },
+  tileId: number,
+  victimId?: string,
+) => {
+  ensureCkState(G);
   const player = playerID!;
   if (!G.mustMoveBandit) return INVALID_MOVE;
   if (!validBanditTiles(G).includes(tileId)) return INVALID_MOVE;
   G.banditTile = tileId;
   G.mustMoveBandit = false;
   const victims = banditVictims(G, tileId, player);
-  if (!victims.length) {
+  if (victims.length === 0) {
     log(G, `${name(G, player)} moved the bandit.`);
     return;
   }
@@ -226,14 +210,17 @@ export const moveBandit: Move<GameState> = ({ G, playerID, random }, tileId: num
   const hand = G.players[victim].resources;
   const pool: ResourceKey[] = RESOURCES.flatMap((r) => Array(hand[r]).fill(r));
   const stolen = pool[Math.floor(random.Number() * pool.length)];
-  if (!stolen) return;
   hand[stolen] -= 1;
   G.players[player].resources[stolen] += 1;
   log(G, `${name(G, player)} moved the bandit and stole from ${name(G, victim)}.`);
 };
 
+function requireRolled(G: GameState): boolean {
+  return G.hasRolled && !G.mustMoveBandit;
+}
+
 export const buildRoad: Move<GameState> = ({ G, playerID }, edgeId: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   const free = G.freeRoads > 0;
@@ -247,19 +234,20 @@ export const buildRoad: Move<GameState> = ({ G, playerID }, edgeId: string) => {
 };
 
 export const buildSettlement: Move<GameState> = ({ G, playerID }, vertexId: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!canAfford(G.players[player].resources, "settlement")) return INVALID_MOVE;
   if (!validSettlementSpots(G, player, false).includes(vertexId)) return INVALID_MOVE;
   pay(G.players[player].resources, BUILD_COSTS.settlement);
   G.buildings[vertexId] = { player, city: false };
+  // A new settlement can cut an opponent's longest road.
   updateLongestRoad(G);
   log(G, `${name(G, player)} built a settlement.`);
 };
 
 export const buildCity: Move<GameState> = ({ G, playerID }, vertexId: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!canAfford(G.players[player].resources, "city")) return INVALID_MOVE;
@@ -270,7 +258,7 @@ export const buildCity: Move<GameState> = ({ G, playerID }, vertexId: string) =>
 };
 
 export const buildKnight: Move<GameState> = ({ G, playerID }, vertexId: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (G.variant !== "cities-knights") return INVALID_MOVE;
   if (!requireRolled(G)) return INVALID_MOVE;
@@ -279,11 +267,11 @@ export const buildKnight: Move<GameState> = ({ G, playerID }, vertexId: string) 
   pay(G.players[player].resources, BUILD_COSTS.knight);
   G.knights[vertexId] = player;
   G.activeKnights[vertexId] = false;
-  log(G, `${name(G, player)} trained an inactive scout.`);
+  log(G, `${playerName(G, player)} trained an inactive knight.`);
 };
 
 export const activateKnight: Move<GameState> = ({ G, playerID }, vertexId?: string) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (G.variant !== "cities-knights") return INVALID_MOVE;
   if (!requireRolled(G)) return INVALID_MOVE;
@@ -292,7 +280,7 @@ export const activateKnight: Move<GameState> = ({ G, playerID }, vertexId?: stri
   if (G.players[player].resources.grain < 1) return INVALID_MOVE;
   G.players[player].resources.grain -= 1;
   G.activeKnights[id] = true;
-  log(G, `${name(G, player)} activated a scout.`);
+  log(G, `${playerName(G, player)} activated a knight.`);
 };
 
 export const deactivateKnight: Move<GameState> = ({ G, playerID }, vertexId?: string) => {
@@ -322,20 +310,19 @@ export const upgradeKnight: Move<GameState> = ({ G, playerID }, vertexId?: strin
 };
 
 export const improveCity: Move<GameState> = ({ G, playerID }, track: ProgressTrackKey) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (G.variant !== "cities-knights") return INVALID_MOVE;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!TRACKS.includes(track)) return INVALID_MOVE;
   if (!Object.values(G.buildings).some((b) => b.player === player && b.city)) return INVALID_MOVE;
-  const current = G.players[player].improvements[track] ?? 0;
+  const current = G.players[player].improvements[track];
   if (current >= 3) return INVALID_MOVE;
   const commodity = TRACK_COMMODITY[track];
   const cost = current + 1;
-  if ((G.players[player].commodities?.[commodity] ?? 0) < cost) return INVALID_MOVE;
-  G.players[player].commodities[commodity] -= cost;
-  G.players[player].improvements[track] = current + 1;
-  log(G, `${name(G, player)} improved ${track} to level ${current + 1}.`);
+  if (!payCommodity(G, player, commodity, cost)) return INVALID_MOVE;
+  G.players[player].improvements[track] += 1;
+  log(G, `${playerName(G, player)} improved ${track} to level ${current + 1}.`);
 };
 
 /**
@@ -355,7 +342,7 @@ export const playProgressCard: Move<GameState> = (
   const player = playerID!;
   if (G.variant !== "cities-knights") return INVALID_MOVE;
   if (!requireRolled(G)) return INVALID_MOVE;
-  const hand = G.players[player].progressCards ?? [];
+  const hand = G.players[player].progressCards;
   const index = hand.indexOf(card);
   if (index < 0) return INVALID_MOVE;
 
@@ -444,7 +431,7 @@ export const playProgressCard: Move<GameState> = (
 };
 
 export const bankTrade: Move<GameState> = ({ G, playerID }, give: ResourceKey, receive: ResourceKey) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   const hand = G.players[player].resources;
@@ -455,35 +442,27 @@ export const bankTrade: Move<GameState> = ({ G, playerID }, give: ResourceKey, r
   log(G, `${name(G, player)} traded ${rate} ${give} for 1 ${receive}.`);
 };
 
-export const playerTrade: Move<GameState> = ({ G, playerID }, targetPlayer: string, give: ResourceKey, giveAmount: number, receive: ResourceKey, receiveAmount: number) => {
-  ensureExpandedState(G);
-  const player = playerID!;
-  if (!requireRolled(G)) return INVALID_MOVE;
-  if (!G.players[targetPlayer] || targetPlayer === player || give === receive) return INVALID_MOVE;
-  if (giveAmount < 1 || receiveAmount < 1 || giveAmount > 9 || receiveAmount > 9) return INVALID_MOVE;
-  const currentHand = G.players[player].resources;
-  const targetHand = G.players[targetPlayer].resources;
-  if (currentHand[give] < giveAmount || targetHand[receive] < receiveAmount) return INVALID_MOVE;
-  currentHand[give] -= giveAmount;
-  targetHand[give] += giveAmount;
-  targetHand[receive] -= receiveAmount;
-  currentHand[receive] += receiveAmount;
-  log(G, `${name(G, player)} traded ${giveAmount} ${give} to ${name(G, targetPlayer)} for ${receiveAmount} ${receive}.`);
-};
+// ---------------------------------------------------------------------------
+// Development cards
+// ---------------------------------------------------------------------------
 
 export const buyDevCard: Move<GameState> = ({ G, playerID, ctx }) => {
-  ensureExpandedState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!canBuyDevCard(G, player)) return INVALID_MOVE;
   pay(G.players[player].resources, DEV_CARD_COST);
-  const type = G.devDeck.pop();
-  if (!type) return INVALID_MOVE;
+  const type = G.devDeck.pop()!;
   G.players[player].devCards.push({ type, turnBought: ctx.turn });
   log(G, `${name(G, player)} bought a journey card.`);
 };
 
-function consumeCard(G: GameState, player: string, type: "knight" | "roadBuilding" | "yearOfPlenty" | "monopoly", turn: number): boolean {
+/** Remove one playable card of `type` from the hand, or fail. */
+function consumeCard(
+  G: GameState,
+  player: string,
+  type: "knight" | "roadBuilding" | "yearOfPlenty" | "monopoly",
+  turn: number,
+): boolean {
   const index = playableDevCardIndex(G, player, type, turn);
   if (index === -1) return false;
   G.players[player].devCards.splice(index, 1);
@@ -492,7 +471,6 @@ function consumeCard(G: GameState, player: string, type: "knight" | "roadBuildin
 }
 
 export const playKnight: Move<GameState> = ({ G, playerID, ctx }) => {
-  ensureExpandedState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!consumeCard(G, player, "knight", ctx.turn)) return INVALID_MOVE;
@@ -503,18 +481,20 @@ export const playKnight: Move<GameState> = ({ G, playerID, ctx }) => {
 };
 
 export const playRoadBuilding: Move<GameState> = ({ G, playerID, ctx }) => {
-  ensureExpandedState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   const roadsLeft = PIECE_LIMITS.road - pieceCounts(G, player).roads;
   if (roadsLeft <= 0) return INVALID_MOVE;
   if (!consumeCard(G, player, "roadBuilding", ctx.turn)) return INVALID_MOVE;
   G.freeRoads = Math.min(2, roadsLeft);
-  log(G, `${name(G, player)} played Road Building.`);
+  log(G, `${name(G, player)} played Road Building — ${G.freeRoads} free roads.`);
 };
 
-export const playYearOfPlenty: Move<GameState> = ({ G, playerID, ctx }, first: ResourceKey, second: ResourceKey) => {
-  ensureExpandedState(G);
+export const playYearOfPlenty: Move<GameState> = (
+  { G, playerID, ctx },
+  first: ResourceKey,
+  second: ResourceKey,
+) => {
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!RESOURCES.includes(first) || !RESOURCES.includes(second)) return INVALID_MOVE;
@@ -524,8 +504,10 @@ export const playYearOfPlenty: Move<GameState> = ({ G, playerID, ctx }, first: R
   log(G, `${name(G, player)} played Year of Plenty.`);
 };
 
-export const playMonopoly: Move<GameState> = ({ G, playerID, ctx }, resource: ResourceKey) => {
-  ensureExpandedState(G);
+export const playMonopoly: Move<GameState> = (
+  { G, playerID, ctx },
+  resource: ResourceKey,
+) => {
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
   if (!RESOURCES.includes(resource)) return INVALID_MOVE;
@@ -644,11 +626,11 @@ export const clearTradeResult: Move<GameState> = ({ G }) => {
 };
 
 export const endTurn: Move<GameState> = ({ G, events, playerID }) => {
-  ensureExpandedState(G);
+  ensureCkState(G);
   if (!requireRolled(G)) return INVALID_MOVE;
   G.freeRoads = 0;
   log(G, `${name(G, playerID!)} ended their turn.`);
   events.endTurn();
 };
 
-export { totalResources };
+export { totalResources, canPayCost };

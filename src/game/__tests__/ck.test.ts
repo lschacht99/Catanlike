@@ -63,13 +63,22 @@ describe("drawing progress cards", () => {
 });
 
 describe("progress event", () => {
-  it("only draws for players with an improvement on that track", () => {
+  it("draws when the red die is at most the improvement level", () => {
     const G = makeState(2, { variant: "cities-knights" });
-    G.players["0"].improvements!.science = 3; // always draws (roll <= 4)
-    const events = runProgressEvent(G, "science", seq([0.1]));
+    G.players["0"].improvements!.science = 3;
+    // red die 2 <= level 3 -> player 0 draws; player 1 (level 0) never draws.
+    const events = runProgressEvent(G, "science", 2, seq([0]));
     expect(G.players["0"].progressCards!.length).toBe(1);
     expect(G.players["1"].progressCards!.length).toBe(0);
     expect(events.length).toBe(1);
+  });
+
+  it("does not draw when the red die exceeds the level", () => {
+    const G = makeState(2, { variant: "cities-knights" });
+    G.players["0"].improvements!.science = 2;
+    const events = runProgressEvent(G, "science", 5, seq([0]));
+    expect(G.players["0"].progressCards!.length).toBe(0);
+    expect(events.length).toBe(0);
   });
 });
 

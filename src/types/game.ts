@@ -109,6 +109,7 @@ export interface PlayerState {
 
 export type PlayerMode = "human" | "bot";
 export type GameVariant = "base" | "cities-knights";
+export type Difficulty = "easy" | "normal" | "hard";
 
 /** The boardgame.io G object. */
 export interface GameState {
@@ -166,6 +167,8 @@ export interface GameState {
   lastTradeResult?: TradeResult | null;
   /** Player modes so the engine can auto-resolve offers made to bots. */
   playerModes?: PlayerMode[];
+  /** Per-player bot difficulty (index = player id). */
+  difficulties?: Difficulty[];
   /** Human-readable event feed (most recent last). */
   log: string[];
 }
@@ -199,6 +202,8 @@ export interface GameConfig {
   playerNames?: string[];
   playerModes?: PlayerMode[];
   variant?: GameVariant;
+  /** Bot difficulty per seat (index = player id). Humans ignore it. */
+  difficulties?: Difficulty[];
 }
 
 /** setupData passed through the lobby when creating an online match. */

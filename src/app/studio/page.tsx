@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { GameVariant, PlayerMode } from "@/types/game";
+import type { Difficulty, GameVariant, PlayerMode } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_NAMES } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
@@ -16,6 +16,7 @@ export default function StudioPage() {
   const [themeId, setThemeId] = useState("hamsa");
   const [numPlayers, setNumPlayers] = useState(4);
   const [variant, setVariant] = useState<GameVariant>("base");
+  const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [playerModes, setPlayerModes] = useState<PlayerMode[]>(["human", "human", "bot", "bot"]);
   const [playerNames, setPlayerNames] = useState<string[]>(["Leah", "Moshe", "Scout", "Guide"]);
 
@@ -38,7 +39,7 @@ export default function StudioPage() {
     setPlayerModes((modes) => modes.map((mode, i) => (i === index ? value : mode)));
   }
 
-  function startGame(custom?: { themeId?: string; names?: string[]; modes?: PlayerMode[]; variant?: GameVariant; numPlayers?: number }) {
+  function startGame(custom?: { themeId?: string; names?: string[]; modes?: PlayerMode[]; variant?: GameVariant; numPlayers?: number; difficulty?: Difficulty }) {
     const finalNumPlayers = custom?.numPlayers ?? numPlayers;
     const names = Array.from({ length: finalNumPlayers }, (_, i) => custom?.names?.[i] || playerNames[i] || PLAYER_NAMES[i] || `Player ${i + 1}`);
     const modes = Array.from({ length: finalNumPlayers }, (_, i) => custom?.modes?.[i] || playerModes[i] || "human");
@@ -49,6 +50,7 @@ export default function StudioPage() {
       playerModes: modes,
       playerNames: names,
       variant: custom?.variant ?? variant,
+      difficulties: Array.from({ length: finalNumPlayers }, () => custom?.difficulty ?? difficulty),
     });
     router.push("/game");
   }
@@ -104,6 +106,24 @@ export default function StudioPage() {
             <span className="block text-[11px] text-white/55">Adds buildable knight units</span>
           </button>
         </div>
+      </section>
+
+      <section className="mb-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">Bot difficulty</p>
+        <div className="grid grid-cols-3 gap-2">
+          {(["easy", "normal", "hard"] as Difficulty[]).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDifficulty(d)}
+              className={`rounded-2xl border px-3 py-3 text-center text-sm font-semibold capitalize ${difficulty === d ? "border-yellow-400 bg-yellow-400/20 text-yellow-300" : "border-white/10 bg-white/5"}`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-white/50">
+          Harder bots plan sharper, block the leader, and drive tougher trades.
+        </p>
       </section>
 
       <section className="mb-4">

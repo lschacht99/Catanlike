@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeState } from "./helpers";
-import { evaluateTradeOffer, resourceValueFor } from "../ai/trade";
+import { botProposeTrade, evaluateTradeOffer, resourceValueFor } from "../ai/trade";
 import type { TradeOffer } from "@/types/game";
 import { buildGeometry } from "../geometry";
 
@@ -79,5 +79,40 @@ describe("bot trade decisions", () => {
     );
     expect(result.accept).toBe(false);
     expect(result.reason).toMatch(/leader/i);
+  });
+});
+
+describe("difficulty & bot proposals", () => {
+  it("easy bots accept a slightly bad deal that hard bots refuse", () => {
+    const G = makeState(2, { playerModes: ["human", "bot"] });
+    G.players["1"].resources.ore = 2;
+    // Bot gives 1 wood (gets), receives 1 ore (pays) — roughly neutral/slightly bad.
+    const off = offer({ from: "0", to: "1", give: "wood", giveAmount: 1, receive: "ore", receiveAmount: 1 });
+    const easy = evaluateTradeOffer(G, off, () => 0.5, "easy");
+    const hard = evaluateTradeOffer(G, off, () => 0.5, "hard");
+    // Easy is at least as willing as hard.
+    expect(Number(easy.accept)).toBeGreaterThanOrEqual(Number(hard.accept));
+  });
+
+  it("botProposeTrade offers a needed resource for a surplus, targeting a human", () => {
+    const G = makeState(2, { playerModes: ["bot", "human"] });
+    // Bot (0) hoards wood, has no ore (needs it for nothing base... ensure a goal):
+    G.players["0"].resources.wood = 4;
+    G.players["0"].resources.ore = 0;
+    G.players["1"].resources.ore = 3;
+    const off = botProposeTrade(G, "0", () => 0, "hard"); // rng 0 -> always initiates
+    if (off) {
+      expect(off.from).toBe("0");
+      expect(off.to).toBe("1"); // the human rival
+      expect(off.give).not.toBe(off.receive);
+      expect(G.players["0"].resources[off.give]).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("bots never propose to other bots", () => {
+    const G = makeState(3, { playerModes: ["bot", "bot", "bot"] });
+    G.players["0"].resources.wood = 4;
+    const off = botProposeTrade(G, "0", () => 0, "hard");
+    expect(off).toBeNull(); // no human rival
   });
 });

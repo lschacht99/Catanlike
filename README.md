@@ -43,7 +43,53 @@ Configuration:
 2. Friends tap **Join Game** and paste the code (works across devices on the
    same network, or anywhere the game server is reachable).
 3. When every seat is taken the match starts automatically. Turns, dice,
-   builds and cards sync live through the authoritative server.
+   builds and cards sync live through the authoritative server. Turn order is
+   enforced server-side, so a player can never act out of turn, and a phone
+   that refreshes rejoins the same match from its saved seat credentials.
+
+### Two phones on the same Wi-Fi (local dev)
+
+```bash
+npm install
+# Terminal 1 — the authoritative game server (holds match state):
+npm run server                      # listens on :8000
+
+# Terminal 2 — the web app, told where the server is:
+NEXT_PUBLIC_GAME_SERVER=http://<YOUR-LAN-IP>:8000 npm run dev   # :3000
+```
+
+Find `<YOUR-LAN-IP>` with `ipconfig getifaddr en0` (macOS) or
+`hostname -I` (Linux) — e.g. `192.168.1.20`. Then on **both phones** (joined
+to the same Wi-Fi) open `http://<YOUR-LAN-IP>:3000`. Player A taps **Create
+Game** and reads out / shares the game code; Player B taps **Join Game** and
+enters it. The `server/` process must be reachable from the phones, so bind
+Wi-Fi, not localhost.
+
+### Production deployment (static front-end + separate server)
+
+The front-end is a static export (GitHub Pages), but online multiplayer needs a
+long-running Node process — **GitHub Pages cannot host it**. Deploy the two
+pieces separately:
+
+1. **Game server** — deploy `server/index.ts` (run with `npm run server`, or
+   `tsx server/index.ts`) to any Node host: **Render**, **Railway**,
+   **Fly.io**, or a plain **VPS**. Set `GAME_ORIGINS` to your Pages origin
+   (e.g. `https://<user>.github.io`) so the socket accepts it, and expose the
+   port publicly (default 8000). This process holds authoritative match state.
+2. **Front-end** — build with the deployed server URL baked in and publish to
+   Pages:
+
+   ```bash
+   NEXT_PUBLIC_GAME_SERVER=https://your-server.example.com npm run pages:build
+   ```
+
+   Commit the `out/` (the existing `deploy-pages.yml` workflow does this).
+   Without `NEXT_PUBLIC_GAME_SERVER` the app stays fully playable but the
+   Multiplayer hub honestly shows *"Online multiplayer requires server setup"*
+   and only local pass-and-play / bots are offered.
+
+Single-phone **pass-and-play** and **vs-bots** modes need no server at all and
+work on the static Pages deploy as-is.
 
 ## What's in the game
 
@@ -175,7 +221,9 @@ scores hundreds of random candidates and penalizes:
 - **Bot trade AI** (`src/game/ai/trade.ts`): bots value needed vs surplus
   resources, refuse deals they can't pay or that only help the leader, accept
   fair/useful ones, with a little randomness. Results show Accepted/Refused
-  with a short reason.
+  with a short reason. Bots also **initiate** trades on their turn
+  (`botProposeTrade`), and an **easy / normal / hard** difficulty (chosen in
+  Studio setup) tunes how sharply they plan, block the leader, and value trades.
 - **Cities & Knights mode** (`src/game/ck.ts`, documented in
   `docs/cities-knights-plan.md`): commodities from cities, three city
   improvement tracks, knights (build / activate / upgrade / deactivate), an

@@ -128,16 +128,22 @@ export const placeSettlement: Move<GameState> = ({ G, playerID }, vertexId: stri
   const player = playerID!;
   if (G.pendingSetupSettlement !== null) return INVALID_MOVE;
   if (!validSettlementSpots(G, player, true).includes(vertexId)) return INVALID_MOVE;
-  G.buildings[vertexId] = { player, city: false };
+  // Cities & Knights setup: round 1 places a settlement, round 2 places a CITY.
+  // (Standard game places a settlement both rounds.)
+  const secondRound = G.setupStep >= G.numPlayers;
+  const asCity = secondRound && G.variant === "cities-knights";
+  G.buildings[vertexId] = { player, city: asCity };
   G.pendingSetupSettlement = vertexId;
-  if (G.setupStep >= G.numPlayers) {
+  if (secondRound) {
+    // Starting resources: 1 per adjacent terrain of the second building.
+    // No commodities are dealt during setup (even for the starting city).
     const geo = getGeometry(G.board);
     for (const tileId of geo.vertices[vertexId].tiles) {
       const tile = G.board.tiles[tileId];
       if (tile.resource !== "desert") G.players[player].resources[tile.resource] += 1;
     }
   }
-  log(G, `${name(G, player)} placed a settlement.`);
+  log(G, `${name(G, player)} placed a ${asCity ? "city" : "settlement"}.`);
 };
 
 export const placeRoad: Move<GameState> = ({ G, events, playerID }, edgeId: string) => {
@@ -168,7 +174,9 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
     distribute(G, sum);
   }
 
-  // Cities & Knights: also roll the event die and resolve its effect.
+  // Cities & Knights: the third (event) die resolves after production. The
+  // production dice double as the red (dice[0]) and yellow (dice[1]) dice;
+  // the red die drives progress-card eligibility on a gate event.
   if (G.variant === "cities-knights") {
     const face = random.D6() as number;
     const event = eventFromDie(face);
@@ -177,7 +185,7 @@ export const rollDice: Move<GameState> = ({ G, playerID, random }) => {
     if (event === "barbarian") {
       for (const line of advanceBarbarians(G, rng)) log(G, line);
     } else {
-      for (const line of runProgressEvent(G, event, rng)) log(G, line);
+      for (const line of runProgressEvent(G, event, dice[0], rng)) log(G, line);
     }
   }
 };

@@ -75,6 +75,7 @@ export function initialState(
   names?: string[],
   variant: GameVariant = "base",
   playerModes?: GameState["playerModes"],
+  difficulties?: GameState["difficulties"],
 ): GameState {
   const players: GameState["players"] = {};
   for (let i = 0; i < numPlayers; i++) {
@@ -96,6 +97,7 @@ export function initialState(
     names: resolvedNames,
     playerNames: resolvedNames,
     playerModes,
+    difficulties,
     variant,
     buildings: {},
     roads: {},
@@ -171,11 +173,12 @@ export function createHexIslesGame(
   names?: string[],
   variant: GameVariant = "base",
   playerModes?: GameState["playerModes"],
+  difficulties?: GameState["difficulties"],
 ): Game<GameState> {
   return {
     name: "hamsa-nomads",
     setup: ({ random }) =>
-      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant, playerModes),
+      initialState(board, numPlayers, random.Shuffle(devDeck()), names, variant, playerModes, difficulties),
     endIf: END_IF,
     phases: PHASES,
   };

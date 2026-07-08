@@ -91,17 +91,18 @@ export function drawProgressCard(
 export function runProgressEvent(
   G: GameState,
   track: ProgressTrackKey,
+  redDie: number,
   rng: Rng,
 ): string[] {
   const events: string[] = [];
+  // Cities & Knights: on a gate event of a discipline, a player draws a
+  // progress card of that discipline when the red die is at most their
+  // improvement level on that track. Higher improvements draw more often.
   for (const [id, player] of Object.entries(G.players)) {
     const level = player.improvements?.[track] ?? 0;
-    if (level < 1) continue;
-    const roll = 1 + Math.floor(rng() * 6);
-    if (roll <= level + 1) {
-      const card = drawProgressCard(G, id, track, rng);
-      if (card) events.push(`${G.names[Number(id)]} drew a ${track} card.`);
-    }
+    if (level < 1 || redDie > level) continue;
+    const card = drawProgressCard(G, id, track, rng);
+    if (card) events.push(`${G.names[Number(id)]} drew a ${track} card.`);
   }
   return events;
 }

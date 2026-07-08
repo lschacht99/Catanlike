@@ -57,11 +57,12 @@ function GamePageInner() {
     const playerModes: PlayerMode[] =
       config.playerModes ?? Array.from({ length: config.numPlayers }, () => "human");
     const variant = config.variant ?? "base";
+    const difficulties = config.difficulties;
     const Board = (props: BoardProps<GameState>) => (
       <GameBoardPlay {...props} theme={theme} playerModes={playerModes} variant={variant} />
     );
     return Client<GameState>({
-      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant, playerModes),
+      game: createHexIslesGame(config.board, config.numPlayers, config.playerNames, variant, playerModes, difficulties),
       board: Board,
       numPlayers: config.numPlayers,
       debug: false,

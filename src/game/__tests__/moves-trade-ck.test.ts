@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// @ts-nocheck
 import { describe, expect, it } from "vitest";
 import { makeState } from "./helpers";
 import {
@@ -9,7 +10,9 @@ import {
   activateKnight,
   deactivateKnight,
   improveCity,
+  placeSettlement,
 } from "../moves";
+import { totalResources } from "../constants";
 import { buildGeometry } from "../geometry";
 import { INVALID_MOVE } from "boardgame.io/core";
 
@@ -18,11 +21,14 @@ function ctx(G: any, playerID: string, extra: any = {}) {
   return { G, playerID, random: { Number: () => 0.5, D6: () => 3 }, events: {}, ...extra };
 }
 
+/** boardgame.io Move is a non-callable union to tsc; invoke via any. */
+const run = (fn: any, ...args: any[]) => fn(...args);
+
 describe("player trade offers", () => {
   it("parks a human-target offer as pending without moving resources", () => {
     const G = makeState(2, { playerModes: ["human", "human"] });
     G.players["0"].resources.wood = 2;
-    proposeTrade(ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
     expect(G.pendingTrade).toMatchObject({ from: "0", to: "1", give: "wood" });
     expect(G.players["0"].resources.wood).toBe(2); // not yet moved
   });
@@ -30,7 +36,7 @@ describe("player trade offers", () => {
   it("rejects an offer the proposer cannot fund", () => {
     const G = makeState(2, { playerModes: ["human", "human"] });
     G.players["0"].resources.wood = 0;
-    const r = proposeTrade(ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    const r = run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
     expect(r).toBe(INVALID_MOVE);
   });
 
@@ -38,8 +44,8 @@ describe("player trade offers", () => {
     const G = makeState(2, { playerModes: ["human", "human"] });
     G.players["0"].resources.wood = 2;
     G.players["1"].resources.ore = 2;
-    proposeTrade(ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
-    respondTrade(ctx(G, "1") as any, true);
+    run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    run(respondTrade, ctx(G, "1") as any, true);
     expect(G.players["0"].resources.wood).toBe(1);
     expect(G.players["0"].resources.ore).toBe(1);
     expect(G.players["1"].resources.wood).toBe(1);
@@ -52,8 +58,8 @@ describe("player trade offers", () => {
     const G = makeState(2, { playerModes: ["human", "human"] });
     G.players["0"].resources.wood = 2;
     G.players["1"].resources.ore = 2;
-    proposeTrade(ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
-    respondTrade(ctx(G, "1") as any, false);
+    run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    run(respondTrade, ctx(G, "1") as any, false);
     expect(G.players["0"].resources.wood).toBe(2);
     expect(G.players["1"].resources.ore).toBe(2);
     expect(G.lastTradeResult?.accepted).toBe(false);
@@ -63,7 +69,7 @@ describe("player trade offers", () => {
     const G = makeState(2, { playerModes: ["human", "bot"] });
     G.players["0"].resources.ore = 2; // give surplus ore
     G.players["1"].resources.wood = 6; // bot has plenty of wood to give
-    proposeTrade(ctx(G, "0") as any, "1", "ore", 2, "wood", 1);
+    run(proposeTrade, ctx(G, "0") as any, "1", "ore", 2, "wood", 1);
     expect(G.pendingTrade).toBeNull();
     expect(G.lastTradeResult?.respondedByBot).toBe(true);
   });
@@ -82,24 +88,24 @@ describe("cities & knights moves", () => {
   it("builds, activates, upgrades and deactivates a knight", () => {
     const { G, vids } = withCityAndKnight();
     Object.assign(G.players["0"].resources, { grain: 5, wool: 5, ore: 5 });
-    buildKnight(ctx(G, "0") as any, vids[3]);
+    run(buildKnight, ctx(G, "0") as any, vids[3]);
     expect(G.knights[vids[3]]).toBe("0");
     expect(G.activeKnights[vids[3]]).toBe(false);
 
-    activateKnight(ctx(G, "0") as any, vids[3]);
+    run(activateKnight, ctx(G, "0") as any, vids[3]);
     expect(G.activeKnights[vids[3]]).toBe(true);
 
-    upgradeKnight(ctx(G, "0") as any, vids[3]);
+    run(upgradeKnight, ctx(G, "0") as any, vids[3]);
     expect(G.knightLevels[vids[3]]).toBe(2);
 
-    deactivateKnight(ctx(G, "0") as any, vids[3]);
+    run(deactivateKnight, ctx(G, "0") as any, vids[3]);
     expect(G.activeKnights[vids[3]]).toBe(false);
   });
 
   it("improves a city track by spending commodities", () => {
     const { G } = withCityAndKnight();
     G.players["0"].commodities.coin = 3;
-    const r = improveCity(ctx(G, "0") as any, "politics");
+    const r = run(improveCity, ctx(G, "0") as any, "politics");
     expect(r).not.toBe(INVALID_MOVE);
     expect(G.players["0"].improvements.politics).toBe(1);
     expect(G.players["0"].commodities.coin).toBe(2); // level 1 costs 1
@@ -108,7 +114,38 @@ describe("cities & knights moves", () => {
   it("blocks a city improvement the player cannot afford", () => {
     const { G } = withCityAndKnight();
     G.players["0"].commodities.book = 0;
-    const r = improveCity(ctx(G, "0") as any, "science");
+    const r = run(improveCity, ctx(G, "0") as any, "science");
     expect(r).toBe(INVALID_MOVE);
+  });
+});
+
+describe("cities & knights setup", () => {
+  it("round 1 places a settlement, round 2 places a city with starting resources (no commodities)", () => {
+    const G = makeState(2, { variant: "cities-knights" });
+    const geo = buildGeometry(G.board.tiles);
+    // Find a non-desert vertex so the starting city yields resources.
+    const cityVertex = Object.values(geo.vertices).find((v) =>
+      v.tiles.some((t) => G.board.tiles[t].resource !== "desert"),
+    )!.id;
+
+    // Round 1 (setupStep 0): a settlement, no starting resources.
+    G.setupStep = 0;
+    G.pendingSetupSettlement = null;
+    const firstVertex = Object.keys(geo.vertices).find(
+      (id) => id !== cityVertex && geo.vertices[id].neighbors.every((n) => n !== cityVertex),
+    )!;
+    run(placeSettlement, ctx(G, "0") as any, firstVertex);
+    expect(G.buildings[firstVertex].city).toBe(false);
+    expect(totalResources(G.players["0"].resources)).toBe(0);
+
+    // Round 2 (setupStep >= numPlayers): a CITY that pays starting resources.
+    G.setupStep = 2;
+    G.pendingSetupSettlement = null;
+    run(placeSettlement, ctx(G, "0") as any, cityVertex);
+    expect(G.buildings[cityVertex].city).toBe(true);
+    expect(totalResources(G.players["0"].resources)).toBeGreaterThan(0);
+    // No commodities dealt during setup.
+    const c = G.players["0"].commodities;
+    expect(c.coin + c.cloth + c.book).toBe(0);
   });
 });

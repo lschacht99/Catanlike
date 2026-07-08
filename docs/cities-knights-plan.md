@@ -42,5 +42,32 @@ unit-tested without boardgame.io, and `moves.ts` only wires them in:
    13-point C&K victory target and is public.
 
 Documented simplifications: no metropolis pieces, no city walls, no knight
-displacement of the bandit adjacency rule, single event die instead of
-event + red pair.
+displacement of the bandit adjacency rule.
+
+## Rules corrections (follow-up pass)
+
+The engine now matches the requested C&K rules more precisely:
+
+- **Setup**: round 1 places a **settlement + road**; round 2 (reverse order)
+  places a **city + road**. Starting resources are dealt **only** from the
+  terrains around the starting *city*, 1 each — **no commodities** are given
+  during setup and the city does **not** pay its doubled/commodity output yet.
+- **Turn dice**: three dice. The two production dice double as the **red** and
+  **yellow** dice (their sum drives normal production); the third is the
+  **event die**. Barbarian face → advance the ship; a gate (trade / politics /
+  science) face → **progress-card check using the red die**.
+- **Progress-card eligibility**: on a gate of discipline *X*, a player draws a
+  card of *X* when the **red die ≤ their city-improvement level** on that
+  track (so higher improvements draw more often).
+- **City production per terrain** (unchanged, verified correct): forest → 1
+  wood + 1 book(paper); pasture → 1 wool + 1 cloth; mountain → 1 ore + 1 coin;
+  fields → 2 grain; hills → 2 brick. Settlements always produce 1.
+
+## Bots (follow-up pass)
+
+`src/game/ai/trade.ts` gained **difficulty** (`easy` / `normal` / `hard`) which
+tunes trade-acceptance strictness, goal weighting, jitter, and leader-blocking,
+plus `botProposeTrade` so a bot can **initiate** a 1:1 offer on its turn (give a
+surplus for a needed resource), always targeting a human rival so the offer has
+someone to answer. Difficulty is chosen in the Studio setup and stored in game
+state / saves.

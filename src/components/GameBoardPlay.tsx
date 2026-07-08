@@ -37,6 +37,7 @@ import {
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
 import { saveGame } from "@/lib/savegame";
+import { botProposeTrade } from "@/game/ai/trade";
 import HexBoardPlay from "./HexBoardPlay";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
@@ -90,6 +91,8 @@ export default function GameBoardPlay({
   const [tradeReviewed, setTradeReviewed] = useState(false);
   // A progress card awaiting its choice picker (C&K).
   const [cardToPlay, setCardToPlay] = useState<ProgressCardType | null>(null);
+  // One bot trade proposal per turn.
+  const botProposeRef = useRef<number>(-1);
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
@@ -166,6 +169,14 @@ export default function GameBoardPlay({
     return () => window.clearTimeout(timer);
   }, [G.lastRoll]);
 
+  // A bot never taps "Continue", so auto-dismiss a lingering result banner
+  // once it's a bot's turn.
+  useEffect(() => {
+    if (!tradeResult || !currentIsCpu) return;
+    const t = window.setTimeout(() => boardMoves.clearTradeResult?.(), 1600);
+    return () => window.clearTimeout(t);
+  }, [tradeResult, currentIsCpu, boardMoves]);
+
   let highlightVertices: string[] = [];
   let highlightEdges: string[] = [];
   let highlightTiles: number[] = [];
@@ -208,6 +219,8 @@ export default function GameBoardPlay({
 
   useEffect(() => {
     if (!currentIsCpu || gameover) return;
+    // While a bot's own trade offer is awaiting a human answer, wait.
+    if (G.pendingTrade) return;
     const timer = window.setTimeout(() => {
       if (ctx.phase === "setup") {
         if (G.pendingSetupSettlement === null) {
@@ -227,6 +240,15 @@ export default function GameBoardPlay({
         const tile = pickBestBanditTile(G, current, validBanditTiles(G));
         if (tile !== null) moves.moveBandit(tile);
         return;
+      }
+      // Once per turn, a bot may offer a trade to a human rival.
+      if (botProposeRef.current !== ctx.turn) {
+        botProposeRef.current = ctx.turn;
+        const offer = botProposeTrade(G, current, Math.random);
+        if (offer && boardMoves.proposeTrade) {
+          boardMoves.proposeTrade(offer.to, offer.give, offer.giveAmount, offer.receive, offer.receiveAmount);
+          return;
+        }
       }
       const hand = G.players[current].resources;
       const cpuCards = G.players[current].progressCards ?? [];
@@ -266,7 +288,7 @@ export default function GameBoardPlay({
       moves.endTurn();
     }, inSetup ? 420 : 650);
     return () => window.clearTimeout(timer);
-  }, [G, boardMoves, ctx.phase, current, currentIsCpu, gameover, inSetup, moves, variant]);
+  }, [G, boardMoves, ctx.phase, ctx.turn, current, currentIsCpu, gameover, inSetup, moves, variant]);
 
   function onVertexTap(id: string) {
     if (currentIsCpu) return;

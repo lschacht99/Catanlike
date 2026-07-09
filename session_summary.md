@@ -132,3 +132,31 @@ Corrected the Cities & Knights commodity model to the real ruleset:
 > Note: `main` and the `Test` branch share the same broken tree (main merged Test).
 > This fix lands on `claude/hex-trading-game-theme-uwww7r`; `main` needs it merged
 > to go green.
+
+### 3D board (fourth pass)
+
+Turned the flat SVG board into a **procedural 3D scene** (React Three Fiber +
+three + drei) as the visual hero, without touching game logic.
+
+- **References studied (inspiration only, no code/assets copied)**: vonWolfehaus/
+  von-grid (MIT hex-grid), Bunkerbewohner/threejs-hex-map (height-tiered terrain),
+  the `CylinderGeometry(r,r,h,6)` hex-prism idiom, and drei OrbitControls mobile
+  patterns. Everything is procedural — no imported models or textures.
+- **`HexBoard3D.tsx`**: hex prisms colored by theme + height-tiered by terrain
+  (mountains tall, fields low) over a sea disc; procedural houses/cities, roads,
+  bandit, scattered trees (forest) and peaks (mountains); number tokens drawn to
+  an offscreen canvas (no font/asset fetch → CSP-safe) and laid flat on each tile;
+  amber placement rings / ghost roads / emissive tiles for highlights. A
+  drag-vs-tap guard means orbiting never fires a move. Constrained OrbitControls
+  (no pan, clamped tilt + pinch-zoom).
+- **`BoardStage.tsx`**: drop-in with the exact `HexBoardPlay` props. Lazy-loads
+  the 3D board via `next/dynamic` (`ssr:false`) so the static export stays valid
+  and three/drei land in a **separate async chunk** (/game First Load JS stays
+  ~163 kB; the 3D lib streams in on mount). Falls back to the SVG board when
+  WebGL is unavailable or the canvas throws (error boundary).
+- **`GameBoardPlay.tsx`**: renders `BoardStage`; added a bottom-sheet grabber to
+  the phone control panel.
+- Verified: 70/70 tests, `build` + `pages:build` green, and headless Chromium on
+  a 390px viewport renders the 3D board (setup markers, placed settlement + ghost
+  roads, bandit, tokens, terrain, trees) with **zero console errors** — including
+  against the built GitHub-Pages export.

@@ -265,6 +265,7 @@ export default function TradePanel({
           >
             Trade {giveRate} : 1
           </button>
+          <p className="text-[11px] leading-4 text-ink-faint">{selectedOption?.reason ?? "Default market trade: 4 identical resources for 1 resource."}</p>
         </div>
       ) : (
         <div className="space-y-4">

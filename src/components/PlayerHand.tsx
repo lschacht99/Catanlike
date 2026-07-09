@@ -12,19 +12,23 @@ export default function PlayerHand({
   theme: Theme;
 }) {
   return (
-    <div className="grid grid-cols-5 gap-1.5">
+    <div className="grid grid-cols-5 gap-1" aria-label="Resource hand">
       {RESOURCE_KEYS_ORDERED.map((key) => {
         const style = theme.resources[key];
+        const amount = resources[key] ?? 0;
         return (
           <div
             key={key}
-            className="flex flex-col items-center rounded-xl border border-line bg-cream px-1 py-1.5 shadow-card"
+            aria-label={`${style.label}: ${amount}`}
+            className="min-w-0 rounded-xl border border-line/80 bg-cream/95 px-1.5 py-1 shadow-card"
           >
-            <span className="text-lg leading-none">{style.icon}</span>
-            <span className="mt-0.5 max-w-full truncate text-[9px] font-semibold uppercase tracking-wide text-ink-soft">
+            <div className="flex items-center justify-center gap-1 leading-none">
+              <span className="text-base" aria-hidden="true">{style.icon}</span>
+              <span className="text-sm font-black tabular-nums text-ink">{amount}</span>
+            </div>
+            <span className="mt-0.5 block truncate text-center text-[8px] font-bold uppercase leading-none tracking-wide text-ink-soft">
               {style.label}
             </span>
-            <span className="text-base font-bold text-ink">{resources[key]}</span>
           </div>
         );
       })}

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Sky, MeshWobbleMaterial } from "@react-three/drei";
 import * as THREE from "three";
-import type { Group, Texture } from "three";
+import type { Group, Object3D, Texture } from "three";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import type { Board, Building, ResourceKey, TileResource } from "@/types/game";
 import type { ResourceTheme, Theme } from "@/types/theme";
 import { PLAYER_COLORS, RESOURCE_KEYS_ORDERED } from "@/game/constants";
@@ -26,6 +27,58 @@ function resolveArtUrl(style: ResourceTheme): string | null {
 const tileTextureCache = new Map<string, Texture>();
 const tileTexturePending = new Set<string>();
 
+/**
+ * Uploaded hex art often bakes its own hex silhouette into a square canvas
+ * with a transparent margin around it (a "sticker" look) rather than
+ * painting edge-to-edge. Sampled naively, that margin shows up as a visible
+ * gap/border inside the tile. This scans the decoded image's alpha channel
+ * once (cheap: a fixed 96x96 offscreen sample, not the full-resolution
+ * image) to find the actual visible-content bounding box, then crops the
+ * texture's UV sampling to it via offset/repeat — so whatever is IN the
+ * image fills the hex edge-to-edge, however tight or loose its own margin
+ * happens to be. A fully edge-to-edge image (no transparent margin) is
+ * measured as the full [0,1] box, so this is a safe no-op for those.
+ */
+function cropToVisibleContent(tex: Texture): void {
+  const img = tex.image as HTMLImageElement | undefined;
+  if (!img || !img.width || !img.height) return;
+  const S = 96;
+  const canvas = document.createElement("canvas");
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.drawImage(img, 0, 0, S, S);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, S, S).data;
+  } catch {
+    return; // tainted canvas (cross-origin without CORS) — skip, keep full image
+  }
+  let minX = S, minY = S, maxX = -1, maxY = -1;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      if (data[(y * S + x) * 4 + 3] > 10) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) return; // fully transparent — nothing to crop to
+  // A hair of inward padding so no faint anti-aliased fringe survives at the
+  // tile edge, then convert pixel bounds to UV space (V flips: row 0 = top
+  // of the source image = the texture's v=1 with the default flipY).
+  const pad = 0.02;
+  const u0 = Math.min(0.98, minX / S + pad);
+  const u1 = Math.max(u0 + 0.01, maxX / S - pad);
+  const v0 = Math.min(0.98, 1 - maxY / S + pad);
+  const v1 = Math.max(v0 + 0.01, 1 - minY / S - pad);
+  tex.offset.set(u0, v0);
+  tex.repeat.set(u1 - u0, v1 - v0);
+}
+
 /** Loads (and caches) the distinct tile-art textures a theme needs, without
  *  Suspense: a small re-render fires once each image decodes. Missing/absent
  *  art (e.g. a color-only theme) simply yields no entry — the tile then keeps
@@ -42,6 +95,7 @@ function useTileArtTextures(urls: string[]): Record<string, Texture> {
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
           tex.anisotropy = 4;
+          cropToVisibleContent(tex);
           tileTextureCache.set(url, tex);
           tileTexturePending.delete(url);
           if (!cancelled) force((n) => n + 1);
@@ -96,6 +150,89 @@ const HEX_CAP_GEOMETRY = (() => {
   geometry.computeVertexNormals();
   return geometry;
 })();
+
+/**
+ * A single small tree model for wood/forest hexes only — every other terrain
+ * keeps its existing primitive decor untouched. Tries TreePine.fbx, then
+ * TreeRound.fbx, from the bundled MainTreesSet pack; the model is loaded and
+ * normalized ONCE (module scope, real network/parse cost paid at most once
+ * per session) and every tile clones just the lightweight transform node —
+ * geometry and materials stay shared. If the asset is missing or fails to
+ * parse, wood hexes simply keep the existing primitive cone-and-trunk tree —
+ * no crash, no retry storm, no dependency on the asset being present.
+ */
+const TREE_ASSET_CANDIDATES = [
+  "/assets/MainTreesSet_v1.1/TreePine.fbx",
+  "/assets/MainTreesSet_v1.1/TreeRound.fbx",
+];
+/** Target world height so the model reads as "tiny", matching the primitive tree. */
+const TREE_TARGET_HEIGHT = 0.34;
+
+type TreeAssetStatus = "idle" | "loading" | "loaded" | "failed";
+let treeAssetStatus: TreeAssetStatus = "idle";
+let treeAssetModel: Object3D | null = null;
+const treeAssetListeners = new Set<() => void>();
+
+function notifyTreeAssetListeners(): void {
+  for (const listener of treeAssetListeners) listener();
+}
+
+function loadTreeAssetOnce(basePath: string): void {
+  if (treeAssetStatus !== "idle") return;
+  treeAssetStatus = "loading";
+  const loader = new FBXLoader();
+  const tryCandidate = (i: number): void => {
+    if (i >= TREE_ASSET_CANDIDATES.length) {
+      treeAssetStatus = "failed";
+      notifyTreeAssetListeners();
+      return;
+    }
+    loader.load(
+      `${basePath}${TREE_ASSET_CANDIDATES[i]}`,
+      (model) => {
+        // Normalize scale/position from the model's own raw bounding box, so
+        // this works regardless of the source asset's native unit scale —
+        // ground it at y=0 and center it on X/Z, same footprint as the
+        // primitive tree it replaces.
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        const scale = TREE_TARGET_HEIGHT / (size.y || 1);
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = false;
+            child.receiveShadow = false;
+          }
+        });
+        treeAssetModel = model;
+        treeAssetStatus = "loaded";
+        notifyTreeAssetListeners();
+      },
+      undefined,
+      () => tryCandidate(i + 1),
+    );
+  };
+  tryCandidate(0);
+}
+
+/** null = still loading/unavailable (render the primitive fallback). */
+function useTreeAsset(): Object3D | null {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    loadTreeAssetOnce(basePath);
+    const listener = () => force((n) => n + 1);
+    treeAssetListeners.add(listener);
+    return () => {
+      treeAssetListeners.delete(listener);
+    };
+  }, []);
+  return treeAssetStatus === "loaded" ? treeAssetModel : null;
+}
 
 /** SVG board units → world units. A hex ends up ~1 unit in radius. */
 const SCALE = 0.1;
@@ -159,6 +296,7 @@ export default function HexBoard3D({
   className = "",
 }: HexBoard3DProps) {
   const geo = useMemo(() => buildGeometry(board.tiles), [board.tiles]);
+  const treeAsset = useTreeAsset();
 
   // Distinct tile-art URLs this theme actually needs (a color-only theme
   // yields none, and every tile just keeps its plain colored top).
@@ -375,7 +513,7 @@ export default function HexBoard3D({
                 </mesh>
               )}
 
-              <Decor resource={tile.resource} seed={tile.id} top={h} />
+              <Decor resource={tile.resource} seed={tile.id} top={h} treeAsset={treeAsset} />
 
               {banditTile === tile.id && <Bandit top={h} />}
             </group>
@@ -681,10 +819,25 @@ function buildDecor(resource: TileResource, seed: number): DecorSpec[] {
 /** One decor item. No castShadow — these are small and numerous (up to
  *  19 tiles x 3), so skipping shadow-casting on them keeps mobile cheap;
  *  they still receive shadows from buildings/roads via the tile beneath. */
-function DecorItem({ kind, rot, scale }: { kind: string; rot: number; scale: number }) {
+function DecorItem({
+  kind,
+  rot,
+  scale,
+  treeAsset,
+}: {
+  kind: string;
+  rot: number;
+  scale: number;
+  treeAsset: Object3D | null;
+}) {
   switch (kind) {
     case "tree":
-      return (
+      // A loaded tree asset clones just the (cheap) transform node — geometry
+      // and materials stay shared across every instance. Falls back to the
+      // primitive cone-and-trunk tree when no asset is available.
+      return treeAsset ? (
+        <TreeInstance model={treeAsset} rot={rot} scale={scale} />
+      ) : (
         <group rotation={[0, rot, 0]} scale={scale}>
           <mesh position={[0, 0.06, 0]}>
             <cylinderGeometry args={[0.02, 0.03, 0.12, 5]} />
@@ -807,13 +960,30 @@ function DecorItem({ kind, rot, scale }: { kind: string; rot: number; scale: num
   }
 }
 
-function Decor({ resource, seed, top }: { resource: TileResource; seed: number; top: number }) {
+/** Clones the shared tree model's transform node once per instance (geometry
+ *  and materials stay shared) — the actual "clone/cache" the asset needs. */
+function TreeInstance({ model, rot, scale }: { model: Object3D; rot: number; scale: number }) {
+  const clone = useMemo(() => model.clone(), [model]);
+  return <primitive object={clone} rotation={[0, rot, 0]} scale={scale} />;
+}
+
+function Decor({
+  resource,
+  seed,
+  top,
+  treeAsset,
+}: {
+  resource: TileResource;
+  seed: number;
+  top: number;
+  treeAsset: Object3D | null;
+}) {
   const items = useMemo(() => buildDecor(resource, seed), [resource, seed]);
   return (
     <>
       {items.map((it, i) => (
         <group key={i} position={[it.x, top, it.z]}>
-          <DecorItem kind={it.kind} rot={it.rot} scale={it.scale} />
+          <DecorItem kind={it.kind} rot={it.rot} scale={it.scale} treeAsset={resource === "wood" ? treeAsset : null} />
         </group>
       ))}
     </>

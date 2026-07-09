@@ -159,14 +159,14 @@ export const placeSettlement: Move<GameState> = ({ G, playerID }, vertexId: stri
   G.buildings[vertexId] = { player, city: asCity };
   G.pendingSetupSettlement = vertexId;
   if (secondRound) {
-    // Starting resources come from the second building's adjacent terrain, using
-    // the same production rules as dice rolls: a base-game settlement gives 1
-    // each, and a Cities & Knights starting city gives its full city output —
-    // including a commodity on wood/ore/wool terrain.
+    // Starting resources come from the second building's adjacent terrain: exactly
+    // ONE matching resource per non-desert hex it touches — in BOTH the base game
+    // and Cities & Knights. A starting C&K city does NOT pay its doubled dice
+    // output here, and grants NO commodities (no paper/coin/cloth) at setup.
     const geo = getGeometry(G.board);
     for (const tileId of geo.vertices[vertexId].tiles) {
       const tile = G.board.tiles[tileId];
-      if (tile.resource !== "desert") produce(G, player, tile.resource, asCity, false);
+      if (tile.resource !== "desert") produce(G, player, tile.resource, false, false);
     }
   }
   log(G, `${name(G, player)} placed a ${asCity ? "city" : "settlement"}.`);

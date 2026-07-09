@@ -43,7 +43,53 @@ Configuration:
 2. Friends tap **Join Game** and paste the code (works across devices on the
    same network, or anywhere the game server is reachable).
 3. When every seat is taken the match starts automatically. Turns, dice,
-   builds and cards sync live through the authoritative server.
+   builds and cards sync live through the authoritative server. Turn order is
+   enforced server-side, so a player can never act out of turn, and a phone
+   that refreshes rejoins the same match from its saved seat credentials.
+
+### Two phones on the same Wi-Fi (local dev)
+
+```bash
+npm install
+# Terminal 1 — the authoritative game server (holds match state):
+npm run server                      # listens on :8000
+
+# Terminal 2 — the web app, told where the server is:
+NEXT_PUBLIC_GAME_SERVER=http://<YOUR-LAN-IP>:8000 npm run dev   # :3000
+```
+
+Find `<YOUR-LAN-IP>` with `ipconfig getifaddr en0` (macOS) or
+`hostname -I` (Linux) — e.g. `192.168.1.20`. Then on **both phones** (joined
+to the same Wi-Fi) open `http://<YOUR-LAN-IP>:3000`. Player A taps **Create
+Game** and reads out / shares the game code; Player B taps **Join Game** and
+enters it. The `server/` process must be reachable from the phones, so bind
+Wi-Fi, not localhost.
+
+### Production deployment (static front-end + separate server)
+
+The front-end is a static export (GitHub Pages), but online multiplayer needs a
+long-running Node process — **GitHub Pages cannot host it**. Deploy the two
+pieces separately:
+
+1. **Game server** — deploy `server/index.ts` (run with `npm run server`, or
+   `tsx server/index.ts`) to any Node host: **Render**, **Railway**,
+   **Fly.io**, or a plain **VPS**. Set `GAME_ORIGINS` to your Pages origin
+   (e.g. `https://<user>.github.io`) so the socket accepts it, and expose the
+   port publicly (default 8000). This process holds authoritative match state.
+2. **Front-end** — build with the deployed server URL baked in and publish to
+   Pages:
+
+   ```bash
+   NEXT_PUBLIC_GAME_SERVER=https://your-server.example.com npm run pages:build
+   ```
+
+   Commit the `out/` (the existing `deploy-pages.yml` workflow does this).
+   Without `NEXT_PUBLIC_GAME_SERVER` the app stays fully playable but the
+   Multiplayer hub honestly shows *"Online multiplayer requires server setup"*
+   and only local pass-and-play / bots are offered.
+
+Single-phone **pass-and-play** and **vs-bots** modes need no server at all and
+work on the static Pages deploy as-is.
 
 ## What's in the game
 
@@ -162,11 +208,45 @@ scores hundreds of random candidates and penalizes:
 - lopsided pip totals per resource
 - the top settlement spots clustering next to each other
 
+## Multiplayer, trading & Cities & Knights
+
+- **Local pass-and-play** (2–4 humans on one device) with a **pass-the-device
+  privacy curtain** between turns — the previous player's hand and cards are
+  hidden until the named player taps "Show my turn".
+- **Player-to-player trade offers** with privacy: the proposer picks what to
+  give and request and sees only *how many* cards a rival holds — never the
+  breakdown. The receiver privately accepts/refuses (with its own handoff);
+  resources move only on acceptance. Illegal or unaffordable offers are
+  rejected by the engine.
+- **Bot trade AI** (`src/game/ai/trade.ts`): bots value needed vs surplus
+  resources, refuse deals they can't pay or that only help the leader, accept
+  fair/useful ones, with a little randomness. Results show Accepted/Refused
+  with a short reason. Bots also **initiate** trades on their turn
+  (`botProposeTrade`), and an **easy / normal / hard** difficulty (chosen in
+  Studio setup) tunes how sharply they plan, block the leader, and value trades.
+- **Cities & Knights mode** (`src/game/ck.ts`, documented in
+  `docs/cities-knights-plan.md`): commodities from cities, three city
+  improvement tracks, knights (build / activate / upgrade / deactivate), an
+  event die, a raider (barbarian) track with attack resolution, and a
+  30-card, 3-track **progress deck** with all effects implemented (original
+  names, no copied text). Win at 13 points.
+- **Save / Resume**: local games autosave at each clean turn start
+  (`src/lib/savegame.ts`, versioned). The home screen shows **Resume Game**
+  only when a valid save exists; invalid/old saves are rejected gracefully.
+- **Online multiplayer** stays honest on static hosting: without a configured
+  game server the Multiplayer hub says *"Online multiplayer requires server
+  setup"* rather than faking it. Set `NEXT_PUBLIC_GAME_SERVER` and run
+  `npm run server` to enable the built-in lobby (Create · Join · Waiting Room).
+- **Home entry points**: Standard, Cities & Knights, Multiplayer, Custom
+  Map/Theme, Resume (conditional), Rules — each a distinct, tappable card with
+  lazy-loaded, fallback-safe placeholder art (`public/assets`, `SafeImage`).
+- **Landscape layout**: the game screen flips to board-left / controls-rail
+  on landscape phones and tablets, with no horizontal overflow.
+
 ## Roadmap (scaffolded, not built)
 
 - Ports / harbor trading (3:1, 2:1)
-- Player-to-player trade offers
 - Discard-half on a 7
-- Hidden opponent hands online (boardgame.io playerView)
-- In-progress game persistence across refreshes
+- Hidden opponent hands online (boardgame.io playerView / secret state)
+- Metropolis pieces & city walls for Cities & Knights
 - AI tile art from each theme's `tilePrompt`

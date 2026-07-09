@@ -43,6 +43,7 @@ function NewGamePageInner() {
   useEffect(() => {
     setThemes(allThemes());
     setBoard(generateBoard());
+    setSaveExists(hasSavedGame());
   }, []);
 
   function pickPlayers(n: number) {
@@ -75,10 +76,14 @@ function NewGamePageInner() {
 
   function start() {
     if (!board) return;
+    // Pass-and-play: every seat is a human sharing this device.
+    const playerModes: PlayerMode[] = Array.from({ length: numPlayers }, () => "human");
     saveGameConfig({
       numPlayers,
       themeId,
       board,
+      variant,
+      playerModes,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
       playerModes: playerSetups.slice(0, numPlayers).map((setup) => setup.mode),
       playerSetups: playerSetups.slice(0, numPlayers).map((setup, index) => ({
@@ -108,7 +113,7 @@ function NewGamePageInner() {
         </div>
         <div className="mt-3 space-y-2">
           {Array.from({ length: numPlayers }).map((_, i) => (
-            <div key={i} className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
+            <div key={i} className="flex items-center gap-2">
               <span
                 className="h-4 w-4 shrink-0 rounded-full border border-ink/20"
                 style={{ background: PLAYER_COLORS[i] }}

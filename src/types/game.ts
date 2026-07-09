@@ -105,6 +105,7 @@ export interface PlayerSetup {
   joinCode?: string;
 }
 export type GameVariant = "base" | "cities-knights";
+export type Difficulty = "easy" | "normal" | "hard";
 
 /** The boardgame.io G object. */
 export interface GameState {
@@ -132,6 +133,8 @@ export interface GameState {
   barbarianPosition?: number;
   lastEventDie?: "barbarian" | ProgressTrackKey | null;
   progressDeck?: ProgressCardType[];
+  /** Per-track draw piles (trade / politics / science). */
+  progressDecks?: Record<ProgressTrackKey, ProgressCardType[]>;
   progressDiscards?: ProgressCardType[];
   /** Tile id the bandit currently occupies. */
   banditTile: number;
@@ -154,8 +157,39 @@ export interface GameState {
   freeRoads: number;
   /** Only one development card may be played per turn. */
   playedDevCardThisTurn: boolean;
+  /** Bank trade rate for the current turn (Merchant card lowers it). */
+  tradeRate?: number;
+  /** Player-to-player trade offer awaiting the target's response. */
+  pendingTrade?: TradeOffer | null;
+  /** Outcome of the last resolved offer, for both parties to read. */
+  lastTradeResult?: TradeResult | null;
+  /** Player modes so the engine can auto-resolve offers made to bots. */
+  playerModes?: PlayerMode[];
+  /** Per-player bot difficulty (index = player id). */
+  difficulties?: Difficulty[];
   /** Human-readable event feed (most recent last). */
   log: string[];
+}
+
+/** A proposed player-to-player exchange. Amounts only — never hands. */
+export interface TradeOffer {
+  from: string;
+  to: string;
+  /** What the proposer hands over. */
+  give: ResourceKey;
+  giveAmount: number;
+  /** What the proposer asks for in return. */
+  receive: ResourceKey;
+  receiveAmount: number;
+}
+
+export interface TradeResult {
+  offer: TradeOffer;
+  accepted: boolean;
+  /** Short human-readable reason (mostly for bot refusals). */
+  reason?: string;
+  /** True when a bot answered (no privacy handoff needed). */
+  respondedByBot?: boolean;
 }
 
 /** Saved in localStorage to configure the next local game. */
@@ -167,6 +201,8 @@ export interface GameConfig {
   playerModes?: PlayerMode[];
   playerSetups?: PlayerSetup[];
   variant?: GameVariant;
+  /** Bot difficulty per seat (index = player id). Humans ignore it. */
+  difficulties?: Difficulty[];
 }
 
 /** setupData passed through the lobby when creating an online match. */

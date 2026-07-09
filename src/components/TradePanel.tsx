@@ -1,20 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import type { PlayerMode, PlayerState, ResourceCounts, ResourceKey } from "@/types/game";
+import type { ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { BANK_TRADE_RATE, RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import Sheet from "./Sheet";
 
+/** Only PUBLIC information about a rival is passed in — never their hand. */
+export interface RivalInfo {
+  id: string;
+  name: string;
+  isBot: boolean;
+  /** Total number of resource cards (public), not the breakdown. */
+  cardCount: number;
+}
+
 interface TradePanelProps {
   theme: Theme;
-  resources: ResourceCounts;
+  resources: Record<ResourceKey, number>;
+  /** Bank rate for this turn (Merchant card can lower it). */
+  bankRate?: number;
+  rivals?: RivalInfo[];
   onTrade: (give: ResourceKey, receive: ResourceKey) => void;
-  onClose: () => void;
-  players?: Record<string, PlayerState>;
-  currentPlayer?: string;
-  playerNames?: string[];
-  playerModes?: PlayerMode[];
   onPlayerTrade?: (
     targetPlayer: string,
     give: ResourceKey,
@@ -22,34 +29,36 @@ interface TradePanelProps {
     receive: ResourceKey,
     receiveAmount: number,
   ) => void;
+  onClose: () => void;
 }
+
+type TradeMode = "bank" | "player";
+/** Cap offer sizes; the engine validates real payability on accept. */
+const MAX_OFFER = 4;
 
 export default function TradePanel({
   theme,
   resources,
+  bankRate = BANK_TRADE_RATE,
+  rivals = [],
   onTrade,
-  onClose,
-  players = {},
-  currentPlayer = "0",
-  playerNames = [],
-  playerModes = [],
   onPlayerTrade,
+  onClose,
 }: TradePanelProps) {
-  const [mode, setMode] = useState<"bank" | "player">("bank");
+  const [mode, setMode] = useState<TradeMode>("bank");
   const [give, setGive] = useState<ResourceKey | null>(null);
   const [receive, setReceive] = useState<ResourceKey | null>(null);
   const [targetPlayer, setTargetPlayer] = useState<string | null>(null);
   const [giveAmount, setGiveAmount] = useState(1);
   const [receiveAmount, setReceiveAmount] = useState(1);
 
-  const rivals = Object.keys(players).filter((id) => id !== currentPlayer);
   const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
   const targetHand = targetPlayer ? players[targetPlayer]?.resources : undefined;
   const targetCardCount = targetHand ? Object.values(targetHand).reduce((a, b) => a + b, 0) : 0;
 
   const canBankConfirm =
-    give !== null && receive !== null && give !== receive && resources[give] >= BANK_TRADE_RATE;
-
+    give !== null && receive !== null && give !== receive && resources[give] >= bankRate;
+  // The proposer can only gate on their OWN ability to pay — never the target's.
   const canPlayerConfirm =
     !!onPlayerTrade &&
     !!targetPlayer &&
@@ -119,7 +128,6 @@ export default function TradePanel({
     max: number;
     label: string;
   }) {
-    const safeMax = Math.max(1, max);
     return (
       <div className="flex items-center gap-2">
         <button
@@ -131,7 +139,7 @@ export default function TradePanel({
         </button>
         <span className="w-8 text-center text-lg font-bold text-ink">{value}</span>
         <button
-          onClick={() => onChange(Math.min(safeMax, value + 1))}
+          onClick={() => onChange(Math.min(max, value + 1))}
           aria-label={`Increase ${label}`}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-cream text-lg font-bold text-ink"
         >
@@ -150,15 +158,15 @@ export default function TradePanel({
               { id: "bank", label: "Market Gate" },
               { id: "player", label: "With Players" },
             ] as const
-          ).map((tab) => (
+          ).map((t) => (
             <button
-              key={tab.id}
-              onClick={() => setMode(tab.id)}
+              key={t.id}
+              onClick={() => setMode(t.id)}
               className={`rounded-full py-2 text-xs font-bold uppercase tracking-[0.15em] ${
-                mode === tab.id ? "bg-ink text-cream" : "text-ink-soft"
+                mode === t.id ? "bg-ink text-cream" : "text-ink-soft"
               }`}
             >
-              {tab.label}
+              {t.label}
             </button>
           ))}
         </div>
@@ -167,10 +175,10 @@ export default function TradePanel({
       {mode === "bank" ? (
         <div className="space-y-4">
           <Row
-            title={`You give ${BANK_TRADE_RATE}`}
+            title={`You give ${bankRate}`}
             selected={give}
             onSelect={setGive}
-            disabledFor={(r) => resources[r] < BANK_TRADE_RATE}
+            disabledFor={(r) => resources[r] < bankRate}
           />
           <div className="flex justify-center text-ink-soft">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -190,7 +198,7 @@ export default function TradePanel({
             }}
             className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"
           >
-            Trade {BANK_TRADE_RATE} : 1
+            Trade {bankRate} : 1
           </button>
         </div>
       ) : (
@@ -200,20 +208,25 @@ export default function TradePanel({
               Trade with
             </p>
             <div className="flex flex-wrap gap-2">
-              {rivals.map((id) => (
+              {rivals.map((rival) => (
                 <button
-                  key={id}
-                  onClick={() => setTargetPlayer(id)}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-                    targetPlayer === id
+                  key={rival.id}
+                  onClick={() => setTargetPlayer(rival.id)}
+                  className={`rounded-full border px-3 py-2 text-sm font-semibold ${
+                    targetPlayer === rival.id
                       ? "border-ink bg-ink text-cream"
                       : "border-line bg-cream text-ink"
                   }`}
                 >
-                  {rivalName(id)}
+                  {rival.name}
+                  {rival.isBot ? " 🤖" : ""}
+                  <span className="ml-1 text-[10px] opacity-70">· {rival.cardCount} cards</span>
                 </button>
               ))}
             </div>
+            <p className="mt-1.5 text-[10px] text-ink-faint">
+              You can see how many cards a rival holds, never which ones.
+            </p>
           </div>
           <Row
             title="You give"
@@ -232,13 +245,13 @@ export default function TradePanel({
               <Stepper
                 value={giveAmount}
                 onChange={setGiveAmount}
-                max={resources[give]}
+                max={Math.min(MAX_OFFER, resources[give])}
                 label="give amount"
               />
             </div>
           )}
           <Row
-            title="You receive"
+            title="You request"
             selected={receive}
             onSelect={(r) => {
               setReceive(r);
@@ -264,7 +277,7 @@ export default function TradePanel({
             }}
             className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"
           >
-            Propose Trade
+            Send Offer
           </button>
         </div>
       )}

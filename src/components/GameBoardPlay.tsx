@@ -43,7 +43,7 @@ import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
 import { saveGame } from "@/lib/savegame";
-import HexBoardPlay from "./HexBoardPlay";
+import BoardStage from "./BoardStage";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel, { type RivalInfo } from "./TradePanel";
@@ -373,14 +373,16 @@ export default function GameBoardPlay({
 
       <div className="relative z-10 min-h-0 flex-1 p-2 sm:p-3">
         <div className="board-card relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20 shadow-2xl">
-          <HexBoardPlay board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
+          <BoardStage board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
           {instruction && <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/65 px-3 py-1.5 text-center text-xs font-semibold text-yellow-300 shadow-lg backdrop-blur">{instruction}</div>}
           {lastLog && <div className="pointer-events-none absolute bottom-3 left-3 max-w-[82%] rounded-xl bg-black/55 px-3 py-1.5 text-[11px] text-white/85 shadow-lg backdrop-blur">{lastLog}</div>}
         </div>
       </div>
       </div>
 
-      <div className="relative z-10 shrink-0 overflow-y-auto rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur portrait:max-h-[46dvh] landscape:w-[22rem] landscape:max-h-none landscape:max-w-[42%] landscape:shrink-0 landscape:overflow-y-auto landscape:rounded-none landscape:rounded-l-3xl landscape:border-l landscape:border-t-0">
+      <div className="relative z-10 shrink-0 overflow-y-auto rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur portrait:max-h-[46dvh] landscape:w-[22rem] landscape:max-h-none landscape:max-w-[42%] landscape:shrink-0 landscape:overflow-y-auto landscape:rounded-none landscape:rounded-l-3xl landscape:border-l landscape:border-t-0">
+        {/* Sheet grabber — signals this control panel is a draggable-style sheet. */}
+        <div className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-white/20 landscape:hidden" />
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-black" style={{ color: PLAYER_COLORS[Number(current)] }}>{names[Number(current)]}&rsquo;s turn</span>
           {G.lastRoll && <span className="rounded-lg bg-white/10 px-2 py-0.5 text-sm font-bold text-white">🎲 {G.lastRoll[0]} + {G.lastRoll[1]} = {G.lastRoll[0] + G.lastRoll[1]}</span>}

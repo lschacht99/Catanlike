@@ -12,21 +12,9 @@ export type ProgressTrackKey = (typeof PROGRESS_TRACK_KEYS)[number];
 export type ProgressTrackCounts = Record<ProgressTrackKey, number>;
 
 export type ProgressCardType =
-  // trade (cloth)
-  | "harvest"
-  | "merchant"
-  | "caravan"
-  | "marketDay"
-  // politics (coin)
-  | "diplomat"
-  | "warlord"
-  | "intrigue"
-  | "levy"
-  // science (book)
-  | "roadworks"
-  | "invention"
-  | "oreRush"
-  | "scholar";
+  | "roadworks" | "bridgeCrew" | "trailSurvey" | "harvest" | "irrigation" | "oreRush"
+  | "merchant" | "marketDay" | "caravan" | "harborDeal" | "storehouse" | "guildFavor"
+  | "diplomat" | "watchPatrol" | "borderPost" | "invention" | "scribe" | "engineer";
 
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
@@ -107,7 +95,15 @@ export interface PlayerState {
   victoryBonus?: number;
 }
 
-export type PlayerMode = "human" | "bot";
+export type PlayerMode = "human" | "remote" | "bot";
+export type BotDifficulty = "easy" | "normal" | "hard";
+
+export interface PlayerSetup {
+  mode: PlayerMode;
+  botDifficulty?: BotDifficulty;
+  /** Seat-specific invite shown for remote-human setup. */
+  joinCode?: string;
+}
 export type GameVariant = "base" | "cities-knights";
 export type Difficulty = "easy" | "normal" | "hard";
 
@@ -122,6 +118,8 @@ export interface GameState {
   playerNames?: string[];
   /** Rules variant this match was created with. */
   variant?: GameVariant;
+  /** Per-seat control assignments for local, remote, and bot players. */
+  playerSetups?: PlayerSetup[];
   /** vertexId -> building */
   buildings: Record<string, Building>;
   /** edgeId -> player id */
@@ -130,7 +128,7 @@ export interface GameState {
   knights: Record<string, string>;
   /** vertexId -> active knight flag */
   activeKnights?: Record<string, boolean>;
-  /** vertexId -> knight strength (1 basic, 2 strong). Missing = 1. */
+  /** vertexId -> knight strength (1-3). */
   knightLevels?: Record<string, number>;
   barbarianPosition?: number;
   lastEventDie?: "barbarian" | ProgressTrackKey | null;
@@ -201,6 +199,7 @@ export interface GameConfig {
   board: Board;
   playerNames?: string[];
   playerModes?: PlayerMode[];
+  playerSetups?: PlayerSetup[];
   variant?: GameVariant;
   /** Bot difficulty per seat (index = player id). Humans ignore it. */
   difficulties?: Difficulty[];
@@ -210,4 +209,5 @@ export interface GameConfig {
 export interface OnlineSetupData {
   board: Board;
   themeId: string;
+  playerSetups?: PlayerSetup[];
 }

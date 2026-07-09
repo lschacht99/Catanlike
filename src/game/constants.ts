@@ -87,18 +87,11 @@ export const TRACK_COMMODITY: Record<ProgressTrackKey, CommodityKey> = {
 };
 
 export const PROGRESS_CARD_LABELS: Record<ProgressCardType, string> = {
-  harvest: "Harvest Festival",
-  merchant: "Master Trader",
-  caravan: "Caravan",
-  marketDay: "Market Day",
-  diplomat: "Envoy",
-  warlord: "Warlord",
-  intrigue: "Intrigue",
-  levy: "Levy",
-  roadworks: "Roadworks",
-  invention: "Invention",
-  oreRush: "Deep Shafts",
-  scholar: "Scholars",
+  roadworks: "Roadworks", bridgeCrew: "Bridge Crew", trailSurvey: "Trail Survey",
+  harvest: "Harvest", irrigation: "Irrigation", oreRush: "Ore Rush",
+  merchant: "Merchant", marketDay: "Market Day", caravan: "Caravan", harborDeal: "Harbor Deal", storehouse: "Storehouse", guildFavor: "Guild Favor",
+  diplomat: "Diplomat", watchPatrol: "Watch Patrol", borderPost: "Border Post",
+  invention: "Invention", scribe: "Scribe", engineer: "Engineer",
 };
 
 /** Original short effect text — never copied from any rulebook. */
@@ -149,9 +142,10 @@ export function progressDeckFor(track: ProgressTrackKey): ProgressCardType[] {
 
 /** Legacy flat deck (kept for old saved states). */
 export const PROGRESS_DECK: ProgressCardType[] = [
-  ...progressDeckFor("trade"),
-  ...progressDeckFor("politics"),
-  ...progressDeckFor("science"),
+  "roadworks", "bridgeCrew", "trailSurvey", "harvest", "irrigation", "oreRush",
+  "merchant", "marketDay", "caravan", "harborDeal", "storehouse", "guildFavor",
+  "diplomat", "watchPatrol", "borderPost", "invention", "scribe", "engineer",
+  "roadworks", "harvest", "merchant", "diplomat", "invention", "oreRush",
 ];
 
 /** A player may hold at most this many progress cards. */

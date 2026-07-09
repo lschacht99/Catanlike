@@ -53,6 +53,8 @@ export default function TradePanel({
   const [receiveAmount, setReceiveAmount] = useState(1);
 
   const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
+  const targetHand = targetPlayer ? players[targetPlayer]?.resources : undefined;
+  const targetCardCount = targetHand ? Object.values(targetHand).reduce((a, b) => a + b, 0) : 0;
 
   const canBankConfirm =
     give !== null && receive !== null && give !== receive && resources[give] >= bankRate;
@@ -63,9 +65,16 @@ export default function TradePanel({
     give !== null &&
     receive !== null &&
     give !== receive &&
-    giveAmount > 0 &&
-    receiveAmount > 0 &&
-    resources[give] >= giveAmount;
+    resources[give] >= giveAmount &&
+    giveAmount >= 1 &&
+    receiveAmount >= 1;
+
+  function rivalName(id: string): string {
+    const base = playerNames[Number(id)] ?? `Player ${Number(id) + 1}`;
+    if (playerModes[Number(id)] === "bot") return `${base} Bot`;
+    if (playerModes[Number(id)] === "remote") return `${base} Remote`;
+    return base;
+  }
 
   function Row({
     title,
@@ -250,15 +259,13 @@ export default function TradePanel({
             }}
             disabledFor={(r) => r === give}
           />
-          {receive && (
-            <div className="flex items-center justify-between rounded-2xl border border-line bg-cream px-3 py-2">
-              <span className="text-xs font-semibold text-ink-soft">Amount requested</span>
-              <Stepper
-                value={receiveAmount}
-                onChange={setReceiveAmount}
-                max={MAX_OFFER}
-                label="request amount"
-              />
+          {receive && targetPlayer && (
+            <div className="rounded-2xl border border-line bg-cream px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-ink-soft">Request amount</span>
+                <Stepper value={receiveAmount} onChange={setReceiveAmount} max={9} label="receive amount" />
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-ink-faint">Private: exact rival resources are hidden. Public cards: {targetCardCount}.</p>
             </div>
           )}
           <button

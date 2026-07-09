@@ -2,14 +2,14 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Board, GameVariant, PlayerMode } from "@/types/game";
+import type { Board, BotDifficulty, GameVariant, PlayerMode, PlayerSetup } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { generateBoard } from "@/game/generator";
 import { createDuelBoard } from "@/game/board-generator/presets";
 import { allThemes } from "@/game/themes";
 import { saveGameConfig } from "@/lib/storage";
-import { hasSavedGame } from "@/lib/savegame";
+import { BOT_DIFFICULTY_LABELS, PLAYER_MODE_LABELS, joinCodeForSeat } from "@/game/player-control";
 import HexBoard from "@/components/HexBoard";
 import {
   Card,
@@ -23,18 +23,22 @@ import {
 
 const DEFAULT_NAMES = ["Player 1", "Player 2", "Player 3", "Player 4"];
 
-function NewGameInner() {
+function NewGamePageInner() {
   const router = useRouter();
-  const params = useSearchParams();
-  const [variant, setVariant] = useState<GameVariant>(
-    params.get("variant") === "ck" ? "cities-knights" : "base",
-  );
+  const search = useSearchParams();
   const [numPlayers, setNumPlayers] = useState(3);
   const [themeId, setThemeId] = useState("classic");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   const [board, setBoard] = useState<Board | null>(null);
-  const [saveExists, setSaveExists] = useState(false);
+  const [playerSetups, setPlayerSetups] = useState<PlayerSetup[]>([
+    { mode: "human" },
+    { mode: "human" },
+    { mode: "bot", botDifficulty: "normal" },
+    { mode: "bot", botDifficulty: "normal" },
+  ]);
+  const variant = (search.get("variant") === "cities-knights" ? "cities-knights" : "base") as GameVariant;
+  const localMultiplayer = search.get("multiplayer") === "local";
 
   useEffect(() => {
     setThemes(allThemes());
@@ -50,6 +54,26 @@ function NewGameInner() {
 
   const theme = themes.find((t) => t.id === themeId) ?? themes[0];
 
+  function setMode(index: number, mode: PlayerMode) {
+    setPlayerSetups((current) => {
+      const next = [...current];
+      next[index] = {
+        mode,
+        botDifficulty: mode === "bot" ? next[index]?.botDifficulty ?? "normal" : undefined,
+        joinCode: mode === "remote" ? next[index]?.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
+      };
+      return next;
+    });
+  }
+
+  function setDifficulty(index: number, botDifficulty: BotDifficulty) {
+    setPlayerSetups((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], mode: "bot", botDifficulty };
+      return next;
+    });
+  }
+
   function start() {
     if (!board) return;
     // Pass-and-play: every seat is a human sharing this device.
@@ -61,35 +85,22 @@ function NewGameInner() {
       variant,
       playerModes,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
+      playerModes: playerSetups.slice(0, numPlayers).map((setup) => setup.mode),
+      playerSetups: playerSetups.slice(0, numPlayers).map((setup, index) => ({
+        mode: setup.mode,
+        botDifficulty: setup.mode === "bot" ? setup.botDifficulty ?? "normal" : undefined,
+        joinCode: setup.mode === "remote" ? setup.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
+      })),
+      variant,
     });
     router.push("/game");
   }
 
   return (
     <Shell>
-      <TopBar title={variant === "cities-knights" ? "New · Cities & Knights" : "New Journey"} />
+      <TopBar title={variant === "cities-knights" ? "Cities & Knights" : localMultiplayer ? "Local Multiplayer" : "New Journey"} />
 
-      {saveExists && (
-        <div className="mb-4 rounded-2xl border border-rust/40 bg-rust/10 p-3 text-xs text-ink">
-          Starting a new game won&rsquo;t erase your saved game until this one is
-          saved.{" "}
-          <a href="/game?resume=1" className="font-bold text-rust underline">
-            Resume instead
-          </a>
-        </div>
-      )}
-
-      <Card className="mb-4">
-        <SectionLabel>Mode</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <Chip selected={variant === "base"} onClick={() => setVariant("base")}>
-            Standard
-          </Chip>
-          <Chip selected={variant === "cities-knights"} onClick={() => setVariant("cities-knights")}>
-            Cities &amp; Knights
-          </Chip>
-        </div>
-      </Card>
+      {localMultiplayer && <Card className="mb-4 text-sm leading-6 text-ink-soft"><b className="text-ink">Local multiplayer:</b> pass-and-play privacy screens hide each hand between turns. Online multiplayer requires running the included server and is not faked on GitHub Pages.</Card>}
 
       <Card className="mb-4">
         <SectionLabel>Players</SectionLabel>
@@ -117,6 +128,35 @@ function NewGameInner() {
                 placeholder={DEFAULT_NAMES[i]}
                 className="w-full rounded-xl border border-line bg-parchment px-3 py-2 text-sm text-ink outline-none focus:border-ink/40"
               />
+              <select
+                value={playerSetups[i]?.mode ?? "human"}
+                onChange={(e) => setMode(i, e.target.value as PlayerMode)}
+                aria-label={`Seat ${i + 1} player type`}
+                className="rounded-xl border border-line bg-parchment px-2 py-2 text-xs text-ink outline-none"
+              >
+                <option value="human">Human on this device / pass-and-play</option>
+                <option value="remote">Remote human</option>
+                <option value="bot">Bot</option>
+              </select>
+              <div className="col-span-3 ml-6 rounded-xl border border-line bg-parchment/60 px-3 py-2 text-xs text-ink-soft">
+                <b className="text-ink">{PLAYER_MODE_LABELS[playerSetups[i]?.mode ?? "human"]}</b>
+                {playerSetups[i]?.mode === "bot" && (
+                  <label className="mt-2 flex items-center justify-between gap-2">
+                    Difficulty
+                    <select
+                      value={playerSetups[i]?.botDifficulty ?? "normal"}
+                      onChange={(e) => setDifficulty(i, e.target.value as BotDifficulty)}
+                      aria-label={`Seat ${i + 1} bot difficulty`}
+                      className="rounded-lg border border-line bg-parchment px-2 py-1 text-xs text-ink outline-none"
+                    >
+                      {Object.entries(BOT_DIFFICULTY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                )}
+                {playerSetups[i]?.mode === "remote" && (
+                  <p className="mt-1 font-semibold text-ink">Join code reserved: {playerSetups[i]?.joinCode ?? joinCodeForSeat("LOCAL", i)}</p>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -168,16 +208,7 @@ function NewGameInner() {
   );
 }
 
+
 export default function NewGamePage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-dvh items-center justify-center text-ink-soft">
-          Loading…
-        </main>
-      }
-    >
-      <NewGameInner />
-    </Suspense>
-  );
+  return <Suspense fallback={<Shell><TopBar title="New Journey" /></Shell>}><NewGamePageInner /></Suspense>;
 }

@@ -380,7 +380,7 @@ export default function GameBoardPlay({
       </div>
       </div>
 
-      <div className="relative z-10 shrink-0 rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur landscape:w-[22rem] landscape:max-w-[42%] landscape:shrink-0 landscape:overflow-y-auto landscape:rounded-none landscape:rounded-l-3xl landscape:border-l landscape:border-t-0">
+      <div className="relative z-10 shrink-0 overflow-y-auto rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur portrait:max-h-[46dvh] landscape:w-[22rem] landscape:max-h-none landscape:max-w-[42%] landscape:shrink-0 landscape:overflow-y-auto landscape:rounded-none landscape:rounded-l-3xl landscape:border-l landscape:border-t-0">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-black" style={{ color: PLAYER_COLORS[Number(current)] }}>{names[Number(current)]}&rsquo;s turn</span>
           {G.lastRoll && <span className="rounded-lg bg-white/10 px-2 py-0.5 text-sm font-bold text-white">🎲 {G.lastRoll[0]} + {G.lastRoll[1]} = {G.lastRoll[0] + G.lastRoll[1]}</span>}

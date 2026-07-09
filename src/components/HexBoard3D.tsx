@@ -2,18 +2,24 @@
 
 import { useMemo, useRef } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, Sky, MeshWobbleMaterial } from "@react-three/drei";
 import type { Group } from "three";
-import type { Board, Building, TileResource } from "@/types/game";
+import type { Board, Building, ResourceKey, TileResource } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { buildGeometry, HEX_SIZE } from "@/game/geometry";
 import { tokenTexture } from "./board3d/tokenTexture";
+import { harborTexture } from "./board3d/harborTexture";
 
 /** SVG board units → world units. A hex ends up ~1 unit in radius. */
 const SCALE = 0.1;
 const HEX_R = HEX_SIZE * SCALE; // 1.0
-const SEA_Y = 0.12;
+const SEA_Y = 0.02;
+
+/** Ocean + shore palette (an actual sea, not a beige disc). */
+const SEA_COLOR = "#1f6f95";
+const SAND_COLOR = "#d8c69b";
+const SUN: [number, number, number] = [7, 8, 5];
 
 /** Relief height per terrain so the board reads like a little island. */
 const TERRAIN_H: Record<TileResource, number> = {
@@ -78,6 +84,50 @@ export default function HexBoard3D({
     [cx, cz],
   );
 
+  // Island footprint radius from the board bounds, for the sandy base under the hexes.
+  const islandR = useMemo(() => {
+    const { minX, minY, maxX, maxY } = geo.bounds;
+    return (Math.max(maxX - minX, maxY - minY) / 2) * SCALE + HEX_R * 0.55;
+  }, [geo.bounds]);
+
+  // Harbors: derived visually from coastal edges (edges touching exactly one tile).
+  // Purely cosmetic — no trade-rule change. Standard 4×(3:1) + 5×(2:1) spread evenly.
+  const harbors = useMemo(() => {
+    const resColor = (k: ResourceKey) => theme.resources[k]?.color ?? "#c9a24a";
+    const coastal = Object.values(geo.edges)
+      .map((e) => {
+        const a = geo.vertices[e.a];
+        const b = geo.vertices[e.b];
+        if (!a || !b) return null;
+        const shared = a.tiles.filter((t) => b.tiles.includes(t));
+        if (shared.length !== 1) return null;
+        const [ax, az] = world(a.x, a.y);
+        const [bx, bz] = world(b.x, b.y);
+        const mx = (ax + bx) / 2;
+        const mz = (az + bz) / 2;
+        return { mx, mz, ang: Math.atan2(mz, mx) };
+      })
+      .filter((v): v is { mx: number; mz: number; ang: number } => v !== null)
+      .sort((p, q) => p.ang - q.ang);
+    if (!coastal.length) return [];
+    const TYPES = [
+      { label: "3:1", accent: "#c9a24a" },
+      { label: "2:1", accent: resColor("wood") },
+      { label: "3:1", accent: "#c9a24a" },
+      { label: "2:1", accent: resColor("brick") },
+      { label: "2:1", accent: resColor("grain") },
+      { label: "3:1", accent: "#c9a24a" },
+      { label: "2:1", accent: resColor("wool") },
+      { label: "2:1", accent: resColor("ore") },
+      { label: "3:1", accent: "#c9a24a" },
+    ];
+    const n = Math.min(9, coastal.length);
+    return Array.from({ length: n }, (_, i) => {
+      const spot = coastal[Math.floor((i * coastal.length) / n)];
+      return { ...spot, ...TYPES[i] };
+    });
+  }, [geo.edges, geo.vertices, world, theme]);
+
   // Height of each vertex = tallest tile it touches, so pieces sit on the land.
   const vertexY = useMemo(() => {
     const map: Record<string, number> = {};
@@ -125,23 +175,24 @@ export default function HexBoard3D({
         onPointerMove={onMove}
         style={{ touchAction: "none" }}
       >
-        <color attach="background" args={["#0b1220"]} />
-        <fog attach="fog" args={["#0b1220", 12, 22]} />
+        <fog attach="fog" args={["#aecadd", 16, 30]} />
+        <Sky distance={450000} sunPosition={SUN} turbidity={4} rayleigh={1.2} mieCoefficient={0.006} mieDirectionalG={0.8} />
 
-        <hemisphereLight args={["#fff6e6", "#20304a", 0.85]} />
-        <ambientLight intensity={0.35} />
+        <hemisphereLight args={["#eaf4ff", "#6b6350", 0.7]} />
+        <ambientLight intensity={0.3} />
         <directionalLight
-          position={[5, 9, 4]}
-          intensity={1.5}
+          position={SUN}
+          intensity={1.55}
           castShadow
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
-          shadow-camera-left={-6}
-          shadow-camera-right={6}
-          shadow-camera-top={6}
-          shadow-camera-bottom={-6}
+          shadow-camera-left={-7}
+          shadow-camera-right={7}
+          shadow-camera-top={7}
+          shadow-camera-bottom={-7}
           shadow-camera-near={1}
-          shadow-camera-far={25}
+          shadow-camera-far={30}
+          shadow-bias={-0.0004}
         />
 
         <OrbitControls
@@ -156,11 +207,33 @@ export default function HexBoard3D({
           target={[0, 0, 0]}
         />
 
-        {/* Sea — a soft disc under the island. */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SEA_Y - 0.02, 0]} receiveShadow>
-          <circleGeometry args={[6, 64]} />
-          <meshStandardMaterial color={theme.board.sea} roughness={0.25} metalness={0.1} />
+        {/* Animated open sea — a wobbling plane on the GPU (cheap on mobile). */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SEA_Y - 0.06, 0]} receiveShadow>
+          <planeGeometry args={[60, 60, 48, 48]} />
+          <MeshWobbleMaterial
+            factor={0.16}
+            speed={0.9}
+            color={SEA_COLOR}
+            roughness={0.35}
+            metalness={0.15}
+          />
         </mesh>
+
+        {/* Sandy island base so the hexes read as land, not floating discs. */}
+        <mesh position={[0, -0.14, 0]} receiveShadow castShadow>
+          <cylinderGeometry args={[islandR, islandR + 0.12, 0.34, 48]} />
+          <meshStandardMaterial color={SAND_COLOR} roughness={0.98} metalness={0.02} />
+        </mesh>
+        {/* Shoreline foam ring where sand meets water. */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SEA_Y + 0.005, 0]}>
+          <ringGeometry args={[islandR - 0.04, islandR + 0.18, 64]} />
+          <meshBasicMaterial color="#e8f3fb" transparent opacity={0.5} toneMapped={false} />
+        </mesh>
+
+        {/* Harbors on the coast (docks + trade-ratio signs). */}
+        {harbors.map((h, i) => (
+          <Harbor key={i} mx={h.mx} mz={h.mz} label={h.label} accent={h.accent} />
+        ))}
 
         {/* Terrain tiles. */}
         {board.tiles.map((tile) => {
@@ -377,15 +450,17 @@ function BuildingMesh({
 function VertexMarker({ x, z, y, onClick }: { x: number; z: number; y: number; onClick?: (e: ThreeEvent<MouseEvent>) => void }) {
   const ring = useRef<Group>(null);
   // Gentle bob + breathing scale so valid moves read as "alive" without noise.
+  // Bob is RELATIVE to the parent group (which already sits on the corner), so
+  // the ring hugs the node instead of floating high above it.
   useFrame((state) => {
     if (!ring.current) return;
     const t = state.clock.elapsedTime * 2.4 + x + z;
-    ring.current.position.y = y + 0.16 + Math.sin(t) * 0.03;
+    ring.current.position.y = 0.02 + Math.sin(t) * 0.02;
     const s = 1 + Math.sin(t) * 0.12;
     ring.current.scale.set(s, s, s);
   });
   return (
-    <group position={[x, y + 0.14, z]} onClick={onClick}>
+    <group position={[x, y + 0.04, z]} onClick={onClick}>
       {/* Large invisible tap target (steady, so taps stay easy). */}
       <mesh>
         <sphereGeometry args={[0.3, 10, 10]} />
@@ -393,7 +468,7 @@ function VertexMarker({ x, z, y, onClick }: { x: number; z: number; y: number; o
       </mesh>
       <group ref={ring}>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.14, 0.04, 10, 24]} />
+          <torusGeometry args={[0.13, 0.04, 10, 24]} />
           <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.7} roughness={0.4} />
         </mesh>
       </group>
@@ -411,6 +486,49 @@ function Bandit({ top }: { top: number }) {
       <mesh position={[0, 0.38, 0]} castShadow>
         <sphereGeometry args={[0.11, 14, 14]} />
         <meshStandardMaterial color="#111826" roughness={0.5} metalness={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+function Harbor({ mx, mz, label, accent }: { mx: number; mz: number; label: string; accent: string }) {
+  const d = Math.hypot(mx, mz) || 1;
+  const nx = mx / d;
+  const nz = mz / d;
+  const angle = Math.atan2(nz, nx);
+  // Sit just outside the coastal edge and reach out over the water (local +x = outward).
+  const ox = mx + nx * 0.26;
+  const oz = mz + nz * 0.26;
+  return (
+    <group position={[ox, SEA_Y, oz]} rotation={[0, -angle, 0]}>
+      {/* Dock plank + mooring posts. */}
+      <mesh position={[0.2, 0.04, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.5, 0.05, 0.22]} />
+        <meshStandardMaterial color="#8a5a34" roughness={0.8} />
+      </mesh>
+      <mesh position={[0.42, 0.1, 0.11]} castShadow>
+        <cylinderGeometry args={[0.02, 0.02, 0.16, 8]} />
+        <meshStandardMaterial color="#5f3d22" roughness={0.8} />
+      </mesh>
+      <mesh position={[0.42, 0.1, -0.11]} castShadow>
+        <cylinderGeometry args={[0.02, 0.02, 0.16, 8]} />
+        <meshStandardMaterial color="#5f3d22" roughness={0.8} />
+      </mesh>
+      {/* Little moored boat. */}
+      <group position={[0.64, 0.06, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[0.26, 0.08, 0.14]} />
+          <meshStandardMaterial color="#c96a3a" roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 0.14, 0]} castShadow>
+          <coneGeometry args={[0.08, 0.2, 4]} />
+          <meshStandardMaterial color="#f4ead2" roughness={0.7} />
+        </mesh>
+      </group>
+      {/* Trade-ratio sign lying flat, readable from the angled camera. */}
+      <mesh position={[0.16, 0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.34, 0.34]} />
+        <meshBasicMaterial map={harborTexture(label, accent)} transparent toneMapped={false} />
       </mesh>
     </group>
   );

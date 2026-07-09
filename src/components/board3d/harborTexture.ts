@@ -17,8 +17,8 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-export function harborTexture(label: string, accent: string): THREE.CanvasTexture {
-  const key = `${label}|${accent}`;
+export function harborTexture(label: string, accent: string, sub?: string): THREE.CanvasTexture {
+  const key = `${label}|${accent}|${sub ?? ""}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -36,12 +36,18 @@ export function harborTexture(label: string, accent: string): THREE.CanvasTextur
   ctx.strokeStyle = accent;
   ctx.stroke();
 
-  // Ratio text
+  // Ratio text (nudged up when there's a resource sub-label under it).
   ctx.fillStyle = "#22303f";
-  ctx.font = "900 108px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(label, S / 2, S / 2 + 4);
+  ctx.font = "900 104px system-ui, sans-serif";
+  ctx.fillText(label, S / 2, sub ? S / 2 - 22 : S / 2 + 4);
+
+  if (sub) {
+    ctx.font = "800 40px system-ui, sans-serif";
+    ctx.fillStyle = accent;
+    ctx.fillText(sub, S / 2, S / 2 + 52);
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;

@@ -32,6 +32,7 @@ import {
   runProgressEvent,
 } from "./ck";
 import { evaluateTradeOffer } from "./ai/trade";
+import { isCommodity, maritimeRate, type TradeCard } from "./harbors";
 import {
   banditVictims,
   canAfford,
@@ -484,15 +485,30 @@ export const playProgressCard: Move<GameState> = (
   log(G, `${name(G, player)} played ${PROGRESS_CARD_LABELS[card]}.`);
 };
 
-export const bankTrade: Move<GameState> = ({ G, playerID }, give: TradeCardKey, receive: TradeCardKey) => {
+/**
+ * Maritime (bank) trade. Give and receive may each be a resource OR — in
+ * Cities & Knights — a commodity. The rate is PER PLAYER: it depends on which
+ * harbors this player's own buildings touch (and, for commodities, whether
+ * they hold Merchant Guild). See `maritimeRate` for the full rule.
+ */
+export const bankTrade: Move<GameState> = ({ G, playerID }, give: TradeCard, receive: TradeCard) => {
   ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
-  const option = bestMaritimeTradeOption(G, player, give, receive);
-  if (!option) return INVALID_MOVE;
-  moveCard(G, player, give, -option.rate);
-  moveCard(G, player, receive, 1);
-  log(G, `${name(G, player)} traded ${option.rate} ${give} for 1 ${receive} (${option.source}).`);
+  if (give === receive) return INVALID_MOVE;
+  // Commodities only exist in Cities & Knights.
+  const usesCommodity = isCommodity(give) || isCommodity(receive);
+  if (usesCommodity && G.variant !== "cities-knights") return INVALID_MOVE;
+
+  const rate = maritimeRate(G, player, give);
+  const p = G.players[player];
+  const giveStore = isCommodity(give) ? p.commodities! : p.resources;
+  const recvStore = isCommodity(receive) ? p.commodities! : p.resources;
+  if ((giveStore[give] ?? 0) < rate) return INVALID_MOVE;
+
+  giveStore[give] -= rate;
+  recvStore[receive] = (recvStore[receive] ?? 0) + 1;
+  log(G, `${name(G, player)} traded ${rate} ${give} for 1 ${receive}.`);
 };
 
 // ---------------------------------------------------------------------------

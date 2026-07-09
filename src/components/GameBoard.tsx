@@ -16,6 +16,7 @@ import {
   validRoadSpots,
   validSettlementSpots,
 } from "@/game/rules";
+import { maritimeRate, playerHarborTypes } from "@/game/harbors";
 import { longestRoadLength, publicPoints, victoryPoints } from "@/game/scoring";
 import { recordResult } from "@/lib/profile";
 import { maritimeTradeOptions } from "@/game/maritime";
@@ -355,8 +356,9 @@ export default function GameBoard({
         <TradePanel
           theme={theme}
           resources={resources}
-          commodities={G.players[viewer]?.commodities}
-          bankOptions={maritimeTradeOptions(G, viewer)}
+          variant={G.variant}
+          rateFor={(give) => maritimeRate(G, viewer, give)}
+          ownedHarbors={[...playerHarborTypes(G, viewer)]}
           onTrade={(give, receive) => moves.bankTrade(give, receive)}
           onClose={() => setSheet(null)}
         />

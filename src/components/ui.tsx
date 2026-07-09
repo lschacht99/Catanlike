@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { asset } from "./SafeImage";
 
 /** Centered phone-width page on the parchment background. */
 export function Shell({
@@ -144,7 +145,7 @@ export function Chip({
 export function HamsaLogo({ size = 64, className = "" }: { size?: number; className?: string }) {
   return (
     <img
-      src="/hamsa-logo-mark.png"
+      src={asset("/hamsa-logo-mark.png")}
       alt="Hamsa Nomads"
       width={size}
       height={size}

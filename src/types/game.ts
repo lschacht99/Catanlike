@@ -12,9 +12,12 @@ export type ProgressTrackKey = (typeof PROGRESS_TRACK_KEYS)[number];
 export type ProgressTrackCounts = Record<ProgressTrackKey, number>;
 
 export type ProgressCardType =
-  | "roadworks" | "bridgeCrew" | "trailSurvey" | "harvest" | "irrigation" | "oreRush"
-  | "merchant" | "marketDay" | "caravan" | "harborDeal" | "storehouse" | "guildFavor"
-  | "diplomat" | "watchPatrol" | "borderPost" | "invention" | "scribe" | "engineer";
+  // trade
+  | "harvest" | "merchant" | "caravan" | "marketDay"
+  // politics
+  | "diplomat" | "warlord" | "intrigue" | "levy"
+  // science
+  | "roadworks" | "invention" | "oreRush" | "scholar";
 
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";

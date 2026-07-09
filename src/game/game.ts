@@ -23,7 +23,6 @@ import {
   deactivateKnight,
   endTurn,
   improveCity,
-  upgradeKnight,
   moveBandit,
   placeRoad,
   placeSettlement,
@@ -103,6 +102,7 @@ export function initialState(
       ? names
       : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i] ?? `Player ${i + 1}`);
   const desert = board.tiles.find((t) => t.resource === "desert");
+  const setups = normalizePlayerSetups(numPlayers, playerSetups);
 
   return {
     numPlayers,
@@ -110,10 +110,10 @@ export function initialState(
     players,
     names: resolvedNames,
     playerNames: resolvedNames,
-    playerModes,
-    difficulties,
+    playerModes: setups.map((s) => s.mode),
+    difficulties: setups.map((s) => s.botDifficulty ?? "normal"),
     variant,
-    playerSetups: normalizePlayerSetups(numPlayers, playerSetups),
+    playerSetups: setups,
     buildings: {},
     roads: {},
     knights: {},
@@ -160,26 +160,7 @@ const PHASES: Game<GameState>["phases"] = {
   },
 
   play: {
-    moves: {
-      rollDice,
-      moveBandit,
-      buildRoad,
-      buildSettlement,
-      buildCity,
-      buildKnight,
-      activateKnight,
-      improveCity,
-      upgradeKnight,
-      playProgressCard,
-      bankTrade,
-      playerTrade,
-      buyDevCard,
-      playKnight,
-      playRoadBuilding,
-      playYearOfPlenty,
-      playMonopoly,
-      endTurn,
-    },
+    moves: PLAY_MOVES,
     turn: {
       order: {
         first: () => 0,

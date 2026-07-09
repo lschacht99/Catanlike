@@ -53,8 +53,10 @@ export default function TradePanel({
   const [receiveAmount, setReceiveAmount] = useState(1);
 
   const showPlayerTab = !!onPlayerTrade && rivals.length > 0;
-  const targetHand = targetPlayer ? players[targetPlayer]?.resources : undefined;
-  const targetCardCount = targetHand ? Object.values(targetHand).reduce((a, b) => a + b, 0) : 0;
+  // Only the PUBLIC card count is ever shown — never the rival's actual hand.
+  const targetCardCount = targetPlayer
+    ? rivals.find((r) => r.id === targetPlayer)?.cardCount ?? 0
+    : 0;
 
   const canBankConfirm =
     give !== null && receive !== null && give !== receive && resources[give] >= bankRate;
@@ -68,13 +70,6 @@ export default function TradePanel({
     resources[give] >= giveAmount &&
     giveAmount >= 1 &&
     receiveAmount >= 1;
-
-  function rivalName(id: string): string {
-    const base = playerNames[Number(id)] ?? `Player ${Number(id) + 1}`;
-    if (playerModes[Number(id)] === "bot") return `${base} Bot`;
-    if (playerModes[Number(id)] === "remote") return `${base} Remote`;
-    return base;
-  }
 
   function Row({
     title,

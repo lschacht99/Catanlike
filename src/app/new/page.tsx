@@ -43,7 +43,6 @@ function NewGamePageInner() {
   useEffect(() => {
     setThemes(allThemes());
     setBoard(generateBoard());
-    setSaveExists(hasSavedGame());
   }, []);
 
   function pickPlayers(n: number) {
@@ -76,22 +75,21 @@ function NewGamePageInner() {
 
   function start() {
     if (!board) return;
-    // Pass-and-play: every seat is a human sharing this device.
-    const playerModes: PlayerMode[] = Array.from({ length: numPlayers }, () => "human");
+    // Each seat carries its own mode (human on this device, remote human, or
+    // bot with a difficulty); pass-and-play privacy screens hide human hands.
+    const seats = playerSetups.slice(0, numPlayers).map((setup, index) => ({
+      mode: setup.mode,
+      botDifficulty: setup.mode === "bot" ? setup.botDifficulty ?? "normal" : undefined,
+      joinCode: setup.mode === "remote" ? setup.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
+    }));
     saveGameConfig({
       numPlayers,
       themeId,
       board,
       variant,
-      playerModes,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
-      playerModes: playerSetups.slice(0, numPlayers).map((setup) => setup.mode),
-      playerSetups: playerSetups.slice(0, numPlayers).map((setup, index) => ({
-        mode: setup.mode,
-        botDifficulty: setup.mode === "bot" ? setup.botDifficulty ?? "normal" : undefined,
-        joinCode: setup.mode === "remote" ? setup.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
-      })),
-      variant,
+      playerModes: seats.map((setup) => setup.mode),
+      playerSetups: seats,
     });
     router.push("/game");
   }

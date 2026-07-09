@@ -46,7 +46,7 @@ import BuildMenu from "./BuildMenu";
 import TradePanel, { type RivalInfo } from "./TradePanel";
 import PrivacyOverlay from "./PrivacyOverlay";
 import { TradeReview, TradeResultBanner } from "./TradeReview";
-import ProgressCardPlay, { cardNeedsChoice } from "./ProgressCardPlay";
+import ProgressCardPlay from "./ProgressCardPlay";
 
 export interface GameBoardPlayProps extends BoardProps<GameState> {
   theme: Theme;

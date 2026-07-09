@@ -74,6 +74,37 @@ The CI lint step failed first, masking ~20 deeper `tsc` errors. Fixes:
 **Result**: `eslint` clean, `tsc` clean, **63/63 tests pass**, `npm run build` and
 `npm run pages:build` both succeed.
 
+### Runtime crashes (second pass)
+
+The build was green but the deployed app crashed at runtime — masked because
+`GameBoardPlay.tsx` carries `// @ts-nocheck`, so undefined variables slip past
+`tsc`. Reproduced with a headless browser (Playwright) driving `/new` → `/game`,
+then swept every undefined identifier by momentarily lifting `@ts-nocheck` and
+running `tsc`:
+
+- **`ackPlayer` / `needsHandoff`** — a second, half-merged pass-and-play curtain
+  referenced an undeclared state. Removed it; the fully-wired `privacyGate` curtain
+  already covers handoffs.
+- **`cardToPlay` / `setCardToPlay`** — the progress-card choice overlay lost its
+  state; restored it and re-routed choice-requiring cards (caravan, invention,
+  marketDay, scholar, intrigue) through the picker via `cardNeedsChoice`.
+- **`saveGame`, `botProposeRef`, `botProposeTrade`, `tradeReviewed`** — missing
+  imports/state for autosave, the once-per-turn bot trade proposal, and the private
+  human trade-review flow.
+- **`playerTrade` move** — the trade panel called a nonexistent move and passed
+  privacy-leaking props (`players`, `currentPlayer`). Rewired to the engine's
+  `proposeTrade` (auto-settles bots, parks human offers in `pendingTrade`) with the
+  privacy-safe `rivals` props.
+- **404 image storm** — home images used raw `/assets/...` paths without the
+  GitHub-Pages `/Catanlike` base, and the `onError` fallback pointed at an
+  equally-unprefixed `fallback.svg`, re-firing `onError` in an infinite loop. All
+  paths now go through `asset()`, and the fallback detaches its handler after one
+  swap. Verified the built HTML emits `/Catanlike/...` and no bare paths remain.
+
+Verified end-to-end: headless run of Standard and Cities & Knights reaches the game
+board with **zero console/page errors**; lint, tsc, 63 tests, build, and pages:build
+all green.
+
 > Note: `main` and the `Test` branch share the same broken tree (main merged Test).
 > This fix lands on `claude/hex-trading-game-theme-uwww7r`; `main` needs it merged
 > to go green.

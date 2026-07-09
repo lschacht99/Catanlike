@@ -36,17 +36,18 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
-import { evaluateBotTrade } from "@/game/trade-ai";
+import { botProposeTrade } from "@/game/ai/trade";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
+import { saveGame } from "@/lib/savegame";
 import HexBoardPlay from "./HexBoardPlay";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel, { type RivalInfo } from "./TradePanel";
 import PrivacyOverlay from "./PrivacyOverlay";
 import { TradeReview, TradeResultBanner } from "./TradeReview";
-import ProgressCardPlay from "./ProgressCardPlay";
+import ProgressCardPlay, { cardNeedsChoice } from "./ProgressCardPlay";
 
 export interface GameBoardPlayProps extends BoardProps<GameState> {
   theme: Theme;
@@ -89,6 +90,10 @@ export default function GameBoardPlay({
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [privacyGate, setPrivacyGate] = useState(true);
   const [tradeNotice, setTradeNotice] = useState<string | null>(null);
+  // A progress card awaiting its interactive choice (resources/commodities/target).
+  const [cardToPlay, setCardToPlay] = useState<ProgressCardType | null>(null);
+  // Whether the addressed human has passed the privacy curtain to review an offer.
+  const [tradeReviewed, setTradeReviewed] = useState(false);
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
@@ -110,18 +115,8 @@ export default function GameBoardPlay({
   const ownInactiveKnight = Object.entries(G.knights ?? {}).find(([id, owner]) => owner === current && !activeKnights[id])?.[0];
   const hasCity = Object.values(G.buildings).some((b) => b.player === current && b.city);
 
-  const humanCount = Object.keys(G.players).filter((id) => playerModes[Number(id)] !== "bot").length;
   const pendingTrade = G.pendingTrade ?? null;
   const tradeResult = G.lastTradeResult ?? null;
-  // Show the "pass the device" curtain when control moves to a different human
-  // in a 2+ human game (and there is no trade flow in progress).
-  const needsHandoff =
-    humanCount >= 2 &&
-    !gameover &&
-    !currentIsCpu &&
-    !pendingTrade &&
-    !(tradeResult && !tradeResult.respondedByBot) &&
-    ackPlayer !== current;
 
   // Public rival info for the trade panel — counts only, never the breakdown.
   const rivals: RivalInfo[] = Object.keys(G.players)
@@ -136,6 +131,8 @@ export default function GameBoardPlay({
   // Autosave at each clean turn start (before rolling) so Resume restarts the
   // active player's turn without replaying production.
   const lastSaved = useRef<string>("");
+  // Guards the once-per-turn bot trade proposal (keyed by ctx.turn).
+  const botProposeRef = useRef<number>(-1);
   useEffect(() => {
     if (inSetup || gameover || G.hasRolled || G.mustMoveBandit || pendingTrade) return;
     const key = `${ctx.turn}:${current}`;
@@ -416,7 +413,7 @@ export default function GameBoardPlay({
                   const commodity = TRACK_COMMODITY[track];
                   return <button key={track} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
                 })}
-                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
+                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => cardNeedsChoice(card) ? setCardToPlay(card) : ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
               </div>
             )}
             <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -432,25 +429,14 @@ export default function GameBoardPlay({
         <TradePanel
           theme={theme}
           resources={resources}
-          players={G.players}
-          currentPlayer={current}
-          playerNames={names}
-          playerModes={playerModes}
-          onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade 4 ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
+          bankRate={G.tradeRate ?? BANK_TRADE_RATE}
+          rivals={rivals}
+          onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade ${G.tradeRate ?? BANK_TRADE_RATE} ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
           onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => {
+            // The engine settles bot targets immediately (surfacing a result banner)
+            // and parks a human offer in pendingTrade for the private review flow.
             setShowTrade(false);
-            const offer = { proposer: current, target, give, giveAmount, receive, receiveAmount };
-            if (isBotSeat(G, target)) {
-              const decision = evaluateBotTrade(G, offer);
-              setTradeNotice(decision.reason);
-              if (decision.accepted) boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount);
-              return;
-            }
-            setPendingAction({
-              title: `Pass to ${names[Number(target)]}`,
-              body: `${names[Number(current)]} offers ${giveAmount} ${give} for ${receiveAmount} ${receive}. Only ${names[Number(target)]} should accept or refuse.`,
-              run: () => setPendingAction({ title: "Accept trade?", body: "Review the public offer. Your exact resources remain private until you choose.", run: () => boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount) }),
-            });
+            boardMoves.proposeTrade?.(target, give, giveAmount, receive, receiveAmount);
           }}
           onClose={() => setShowTrade(false)}
         />
@@ -495,15 +481,6 @@ export default function GameBoardPlay({
           rivals={rivals.map((r) => ({ id: r.id, name: r.name }))}
           onPlay={(choice) => { boardMoves.playProgressCard?.(cardToPlay, choice); setCardToPlay(null); }}
           onCancel={() => setCardToPlay(null)}
-        />
-      )}
-
-      {/* Pass-the-device curtain between human turns. */}
-      {needsHandoff && (
-        <PrivacyOverlay
-          playerName={names[Number(current)]}
-          color={PLAYER_COLORS[Number(current)]}
-          onReady={() => setAckPlayer(current)}
         />
       )}
 

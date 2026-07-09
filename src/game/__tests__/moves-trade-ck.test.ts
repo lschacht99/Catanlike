@@ -113,14 +113,14 @@ describe("cities & knights moves", () => {
 
   it("blocks a city improvement the player cannot afford", () => {
     const { G } = withCityAndKnight();
-    G.players["0"].commodities.book = 0;
+    G.players["0"].commodities.paper = 0; // science costs paper
     const r = run(improveCity, ctx(G, "0") as any, "science");
     expect(r).toBe(INVALID_MOVE);
   });
 });
 
 describe("cities & knights setup", () => {
-  it("round 1 places a settlement, round 2 places a city with starting resources (no commodities)", () => {
+  it("round 1 places a settlement, round 2 places a city paying full city output", () => {
     const G = makeState(2, { variant: "cities-knights" });
     const geo = buildGeometry(G.board.tiles);
     // Find a non-desert vertex so the starting city yields resources.
@@ -138,14 +138,19 @@ describe("cities & knights setup", () => {
     expect(G.buildings[firstVertex].city).toBe(false);
     expect(totalResources(G.players["0"].resources)).toBe(0);
 
-    // Round 2 (setupStep >= numPlayers): a CITY that pays starting resources.
+    // Round 2 (setupStep >= numPlayers): a CITY that pays the SAME output as a
+    // dice roll — including commodities on wood/ore/wool terrain.
     G.setupStep = 2;
     G.pendingSetupSettlement = null;
     run(placeSettlement, ctx(G, "0") as any, cityVertex);
     expect(G.buildings[cityVertex].city).toBe(true);
     expect(totalResources(G.players["0"].resources)).toBeGreaterThan(0);
-    // No commodities dealt during setup.
+
+    // Commodities awarded match the city's adjacent wood/ore/wool terrain.
+    const cityTerrain = geo.vertices[cityVertex].tiles.map((t) => G.board.tiles[t].resource);
     const c = G.players["0"].commodities;
-    expect(c.coin + c.cloth + c.book).toBe(0);
+    expect(c.paper).toBe(cityTerrain.filter((r) => r === "wood").length);
+    expect(c.coin).toBe(cityTerrain.filter((r) => r === "ore").length);
+    expect(c.cloth).toBe(cityTerrain.filter((r) => r === "wool").length);
   });
 });

@@ -3,7 +3,7 @@
 export const RESOURCE_KEYS = ["wood", "brick", "grain", "wool", "ore"] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
 
-export const COMMODITY_KEYS = ["coin", "cloth", "book"] as const;
+export const COMMODITY_KEYS = ["paper", "coin", "cloth"] as const;
 export type CommodityKey = (typeof COMMODITY_KEYS)[number];
 export type CommodityCounts = Record<CommodityKey, number>;
 

@@ -4,7 +4,9 @@ import { useState } from "react";
 import type { CommodityKey, ProgressCardType, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import {
+  COMMODITY_ICONS,
   COMMODITY_KEYS_ORDERED,
+  COMMODITY_LABELS,
   PROGRESS_CARD_DESCRIPTIONS,
   PROGRESS_CARD_LABELS,
   RESOURCE_KEYS_ORDERED,
@@ -29,7 +31,6 @@ export function cardNeedsChoice(card: ProgressCardType): boolean {
   return card in NEEDS;
 }
 
-const COMMODITY_ICON: Record<CommodityKey, string> = { coin: "🪙", cloth: "🧵", book: "📖" };
 
 /**
  * Modal that collects the picks a progress card needs, then plays it.
@@ -109,11 +110,12 @@ export default function ProgressCardPlay({
                       cur.length < need.commodities! ? [...cur, c] : cur,
                     )
                   }
-                  className="flex flex-col items-center rounded-xl border border-white/12 bg-white/5 py-2 text-lg"
+                  className="flex flex-col items-center gap-0.5 rounded-xl border border-white/12 bg-white/5 py-2 text-lg"
                 >
-                  {COMMODITY_ICON[c]}
-                  <span className="text-[9px] capitalize text-white/50">
-                    {c} {commodities.filter((x) => x === c).length || ""}
+                  <span className="leading-none">{COMMODITY_ICONS[c]}</span>
+                  <span className="text-[9px] text-white/50">
+                    {COMMODITY_LABELS[c]}
+                    {commodities.filter((x) => x === c).length ? ` ${commodities.filter((x) => x === c).length}` : ""}
                   </span>
                 </button>
               ))}

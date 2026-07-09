@@ -15,7 +15,9 @@ import type {
 import type { Theme } from "@/types/theme";
 import {
   CITIES_KNIGHTS_POINTS_TO_WIN,
+  COMMODITY_ICONS,
   COMMODITY_KEYS_ORDERED,
+  COMMODITY_LABELS,
   PLAYER_COLORS,
   PROGRESS_CARD_LABELS,
   TOKEN_PIPS,
@@ -107,7 +109,7 @@ export default function GameBoardPlay({
   const boardMoves = moves as ExtendedMoves;
   const names = useMemo(() => G.playerNames ?? G.names ?? [], [G.playerNames, G.names]);
   const player = G.players[current];
-  const commodities = player.commodities ?? { coin: 0, cloth: 0, book: 0 };
+  const commodities = player.commodities ?? { paper: 0, coin: 0, cloth: 0 };
   const improvements = player.improvements ?? { trade: 0, politics: 0, science: 0 };
   const progressCards = player.progressCards ?? [];
   const activeKnights = G.activeKnights ?? {};
@@ -391,11 +393,19 @@ export default function GameBoardPlay({
               <span>Event: {G.lastEventDie ?? "—"}</span>
               <span>Cards: {progressCards.length}</span>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
-              {COMMODITY_KEYS_ORDERED.map((key) => <span key={key} className="rounded-lg bg-black/20 px-1 py-1">{key}: {commodities[key]}</span>)}
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {COMMODITY_KEYS_ORDERED.map((key) => (
+                <div key={key} className="flex flex-col items-center rounded-lg bg-black/20 px-1 py-1.5 leading-tight">
+                  <span className="text-base leading-none">{COMMODITY_ICONS[key]}</span>
+                  <span className="mt-0.5 text-[9px] uppercase tracking-wide text-white/50">{COMMODITY_LABELS[key]}</span>
+                  <span className="text-sm font-bold text-white">{commodities[key]}</span>
+                </div>
+              ))}
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
-              {TRACK_KEYS_ORDERED.map((track) => <span key={track} className="rounded-lg bg-black/20 px-1 py-1">{track}: {improvements[track]}</span>)}
+            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+              {TRACK_KEYS_ORDERED.map((track) => (
+                <span key={track} className="rounded-lg bg-black/20 px-1 py-1 capitalize">{track}: {improvements[track]}</span>
+              ))}
             </div>
           </div>
         )}
@@ -411,7 +421,7 @@ export default function GameBoardPlay({
                 {TRACK_KEYS_ORDERED.map((track) => {
                   const cost = (improvements[track] ?? 0) + 1;
                   const commodity = TRACK_COMMODITY[track];
-                  return <button key={track} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
+                  return <button key={track} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${COMMODITY_LABELS[commodity]} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold capitalize text-white disabled:opacity-30">+ {track}</button>;
                 })}
                 {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => cardNeedsChoice(card) ? setCardToPlay(card) : ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
               </div>

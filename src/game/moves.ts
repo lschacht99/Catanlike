@@ -9,6 +9,7 @@ import type {
   ResourceCounts,
   ResourceKey,
 } from "@/types/game";
+import type { TradeCardKey } from "./maritime";
 import { COMMODITY_KEYS } from "@/types/game";
 import {
   BANK_TRADE_RATE,
@@ -46,6 +47,7 @@ import {
   validSettlementSpots,
 } from "./rules";
 import { updateLargestArmy, updateLongestRoad } from "./scoring";
+import { bestMaritimeTradeOption, moveCard } from "./maritime";
 
 const RESOURCES: ResourceKey[] = ["wood", "brick", "grain", "wool", "ore"];
 const TRACKS: ProgressTrackKey[] = ["trade", "politics", "science"];
@@ -482,16 +484,15 @@ export const playProgressCard: Move<GameState> = (
   log(G, `${name(G, player)} played ${PROGRESS_CARD_LABELS[card]}.`);
 };
 
-export const bankTrade: Move<GameState> = ({ G, playerID }, give: ResourceKey, receive: ResourceKey) => {
+export const bankTrade: Move<GameState> = ({ G, playerID }, give: TradeCardKey, receive: TradeCardKey) => {
   ensureCkState(G);
   const player = playerID!;
   if (!requireRolled(G)) return INVALID_MOVE;
-  const hand = G.players[player].resources;
-  const rate = G.tradeRate ?? BANK_TRADE_RATE;
-  if (give === receive || hand[give] < rate) return INVALID_MOVE;
-  hand[give] -= rate;
-  hand[receive] += 1;
-  log(G, `${name(G, player)} traded ${rate} ${give} for 1 ${receive}.`);
+  const option = bestMaritimeTradeOption(G, player, give, receive);
+  if (!option) return INVALID_MOVE;
+  moveCard(G, player, give, -option.rate);
+  moveCard(G, player, receive, 1);
+  log(G, `${name(G, player)} traded ${option.rate} ${give} for 1 ${receive} (${option.source}).`);
 };
 
 // ---------------------------------------------------------------------------

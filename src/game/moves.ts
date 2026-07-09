@@ -9,13 +9,14 @@ import type {
   ResourceCounts,
   ResourceKey,
 } from "@/types/game";
+import { COMMODITY_KEYS } from "@/types/game";
 import {
   BANK_TRADE_RATE,
   BUILD_COSTS,
   COMMODITY_FROM_RESOURCE,
   DEV_CARD_COST,
-  emptyCommodities,
   emptyImprovements,
+  normalizeCommodities,
   KNIGHT_MAX_LEVEL,
   KNIGHT_UPGRADE_COST,
   PIECE_LIMITS,
@@ -57,7 +58,8 @@ function ensureCkState(G: GameState): void {
   G.progressDeck ??= [...PROGRESS_DECK];
   G.progressDiscards ??= [];
   for (const p of Object.values(G.players)) {
-    p.commodities ??= emptyCommodities();
+    // Normalize migrates legacy `book` → `paper` and fills missing keys with 0.
+    p.commodities = normalizeCommodities(p.commodities);
     p.improvements ??= emptyImprovements();
     p.progressCards ??= [];
     p.victoryBonus ??= 0;
@@ -89,6 +91,42 @@ function name(G: GameState, id: string): string {
 /** Alias used by the Cities & Knights move handlers. */
 const playerName = name;
 
+/**
+ * Award one tile's production to a building's owner. Single source of truth for
+ * both dice production and Cities & Knights starting-city resources:
+ *   - Settlement            → +1 resource
+ *   - Base-game city        → +2 resources
+ *   - Cities & Knights city → wood/ore/wool give +1 resource +1 commodity
+ *                             (paper/coin/cloth); brick/grain give +2 resources
+ * `recordGains` feeds the "you gained" banner for dice rolls; setup skips it.
+ */
+export function produce(
+  G: GameState,
+  player: string,
+  resource: ResourceKey,
+  isCity: boolean,
+  recordGains = true,
+): void {
+  const add = (n: number) => {
+    G.players[player].resources[resource] += n;
+    if (recordGains) {
+      const gains = (G.lastGains[player] ??= {});
+      gains[resource] = (gains[resource] ?? 0) + n;
+    }
+  };
+  if (isCity && G.variant === "cities-knights") {
+    const commodity = COMMODITY_FROM_RESOURCE[resource];
+    if (commodity) {
+      add(1);
+      G.players[player].commodities![commodity] += 1;
+    } else {
+      add(2);
+    }
+  } else {
+    add(isCity ? 2 : 1);
+  }
+}
+
 function distribute(G: GameState, roll: number): void {
   ensureCkState(G);
   const geo = getGeometry(G.board);
@@ -104,18 +142,7 @@ function distribute(G: GameState, roll: number): void {
     for (const tileId of vertex.tiles) {
       const resource = producing.get(tileId);
       if (!resource) continue;
-      const gains = (G.lastGains[building.player] ??= {});
-      if (building.city && G.variant === "cities-knights") {
-        G.players[building.player].resources[resource] += 1;
-        gains[resource] = (gains[resource] ?? 0) + 1;
-        const commodity = COMMODITY_FROM_RESOURCE[resource];
-        if (commodity) G.players[building.player].commodities![commodity] += 1;
-        else { G.players[building.player].resources[resource] += 1; gains[resource] = (gains[resource] ?? 0) + 1; }
-      } else {
-        const amount = building.city ? 2 : 1;
-        G.players[building.player].resources[resource] += amount;
-        gains[resource] = (gains[resource] ?? 0) + amount;
-      }
+      produce(G, building.player, resource, !!building.city);
     }
   }
 }
@@ -132,12 +159,14 @@ export const placeSettlement: Move<GameState> = ({ G, playerID }, vertexId: stri
   G.buildings[vertexId] = { player, city: asCity };
   G.pendingSetupSettlement = vertexId;
   if (secondRound) {
-    // Starting resources: 1 per adjacent terrain of the second building.
-    // No commodities are dealt during setup (even for the starting city).
+    // Starting resources come from the second building's adjacent terrain, using
+    // the same production rules as dice rolls: a base-game settlement gives 1
+    // each, and a Cities & Knights starting city gives its full city output —
+    // including a commodity on wood/ore/wool terrain.
     const geo = getGeometry(G.board);
     for (const tileId of geo.vertices[vertexId].tiles) {
       const tile = G.board.tiles[tileId];
-      if (tile.resource !== "desert") G.players[player].resources[tile.resource] += 1;
+      if (tile.resource !== "desert") produce(G, player, tile.resource, asCity, false);
     }
   }
   log(G, `${name(G, player)} placed a ${asCity ? "city" : "settlement"}.`);
@@ -381,8 +410,7 @@ export const playProgressCard: Move<GameState> = (
   };
   const gainCommodities = (keys: CommodityKey[], n: number) => {
     const chosen = keys.slice(0, n);
-    const valid = (["coin", "cloth", "book"] as CommodityKey[]);
-    if (chosen.length < n || chosen.some((k) => !valid.includes(k))) return false;
+    if (chosen.length < n || chosen.some((k) => !COMMODITY_KEYS.includes(k))) return false;
     for (const k of chosen) com[k] += 1;
     return true;
   };
@@ -394,7 +422,7 @@ export const playProgressCard: Move<GameState> = (
       break;
     case "invention":
       if (!gainResources(pick.resources ?? [], 1)) return INVALID_MOVE;
-      com.book += 1;
+      com.paper += 1;
       break;
     case "marketDay":
       if (!gainCommodities(pick.commodities ?? [], 1)) return INVALID_MOVE;

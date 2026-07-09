@@ -105,6 +105,30 @@ Verified end-to-end: headless run of Standard and Cities & Knights reaches the g
 board with **zero console/page errors**; lint, tsc, 63 tests, build, and pages:build
 all green.
 
+### Commodity system (third pass)
+
+Corrected the Cities & Knights commodity model to the real ruleset:
+
+- Renamed the internal commodity key `book` → `paper` (keys are now
+  `paper, coin, cloth`). City production mapping: **wood → +1 wood +1 paper,
+  ore → +1 ore +1 coin, wool → +1 wool +1 cloth**; brick/grain cities give
+  2 resources and no commodity. Track commodities: trade = cloth, politics = coin,
+  science = paper.
+- Introduced a single `produce()` helper as the source of truth for both dice
+  production and starting-city output, so the **second C&K setup placement (a
+  city) now awards the correct commodities**, not just bare resources.
+- UI shows **Paper 📜 / Coin 🪙 / Cloth 🧵** with readable labels and counts in the
+  always-visible C&K panel (no raw lowercase keys); progress-card picker and
+  improve-city prompts use the same labels/icons. Base game and normal-resource
+  theming are untouched.
+- Added `normalizeCommodities()` for backward compatibility — migrates a saved
+  `book` balance into `paper` and defaults missing keys to 0 (applied in
+  `ensureCkState`).
+- Added 7 tests (city production per terrain, base-city 2-resources-only,
+  settlement, starting-city output, save migration). Suite now **70/70 green**;
+  lint, tsc, build, pages:build all pass; verified the live C&K panel on a
+  390px mobile viewport.
+
 > Note: `main` and the `Test` branch share the same broken tree (main merged Test).
 > This fix lands on `claude/hex-trading-game-theme-uwww7r`; `main` needs it merged
 > to go green.

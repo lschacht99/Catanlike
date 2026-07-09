@@ -74,16 +74,31 @@ export const BONUS_POINTS = 2;
 export const PLAYER_COLORS = ["#1e3a5f", "#b45a37", "#6b7f3e", "#c9a227"];
 export const PLAYER_NAMES = ["Navy", "Rust", "Olive", "Gold"];
 
+// Cities & Knights: a city on these terrains yields 1 resource + 1 commodity.
+// Brick and grain cities have no commodity and yield 2 resources instead.
 export const COMMODITY_FROM_RESOURCE: Partial<Record<ResourceKey, CommodityKey>> = {
+  wood: "paper",
   ore: "coin",
   wool: "cloth",
-  wood: "book",
 };
 
 export const TRACK_COMMODITY: Record<ProgressTrackKey, CommodityKey> = {
   trade: "cloth",
   politics: "coin",
-  science: "book",
+  science: "paper",
+};
+
+/** Human-readable commodity names and icons (never raw keys in the UI). */
+export const COMMODITY_LABELS: Record<CommodityKey, string> = {
+  paper: "Paper",
+  coin: "Coin",
+  cloth: "Cloth",
+};
+
+export const COMMODITY_ICONS: Record<CommodityKey, string> = {
+  paper: "📜",
+  coin: "🪙",
+  cloth: "🧵",
 };
 
 export const PROGRESS_CARD_LABELS: Record<ProgressCardType, string> = {
@@ -103,7 +118,7 @@ export const PROGRESS_CARD_DESCRIPTIONS: Record<ProgressCardType, string> = {
   intrigue: "Steal 1 random resource from a chosen rival.",
   levy: "Each rival gives you 1 random resource.",
   roadworks: "Build 2 roads for free.",
-  invention: "Gain 1 resource of your choice plus 1 book.",
+  invention: "Gain 1 resource of your choice plus 1 paper.",
   oreRush: "Gain 2 ore.",
   scholar: "Gain 2 commodities of your choice.",
 };
@@ -157,7 +172,21 @@ export function emptyResources(): ResourceCounts {
 }
 
 export function emptyCommodities(): CommodityCounts {
-  return { coin: 0, cloth: 0, book: 0 };
+  return { paper: 0, coin: 0, cloth: 0 };
+}
+
+/**
+ * Coerce a possibly-stale commodities purse into the current shape: migrate the
+ * legacy `book` key into `paper` and default every missing commodity to 0.
+ * Safe to call on old saved games.
+ */
+export function normalizeCommodities(raw: unknown): CommodityCounts {
+  const src = (raw ?? {}) as Record<string, number> & { book?: number };
+  return {
+    paper: (src.paper ?? 0) + (src.book ?? 0),
+    coin: src.coin ?? 0,
+    cloth: src.cloth ?? 0,
+  };
 }
 
 export function emptyImprovements(): ProgressTrackCounts {
@@ -172,5 +201,5 @@ export const RESOURCE_KEYS_ORDERED: ResourceKey[] = [
   "wood", "brick", "grain", "wool", "ore",
 ];
 
-export const COMMODITY_KEYS_ORDERED: CommodityKey[] = ["coin", "cloth", "book"];
+export const COMMODITY_KEYS_ORDERED: CommodityKey[] = ["paper", "coin", "cloth"];
 export const TRACK_KEYS_ORDERED: ProgressTrackKey[] = ["trade", "politics", "science"];

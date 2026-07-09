@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "Hamsa Nomads",
   description:
     "Build · Trade · Explore — a mobile-first, themeable hex-board trading game. Pass-and-play or online with friends.",
-  manifest: "/manifest.webmanifest",
+  manifest: withBasePath("/manifest.json"),
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

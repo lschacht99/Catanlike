@@ -57,6 +57,12 @@ export interface GameBoardPlayProps extends BoardProps<GameState> {
   theme: Theme;
   playerModes?: PlayerMode[];
   variant?: GameVariant;
+  /**
+   * Pass-and-play privacy curtain between local human turns. Defaults on;
+   * duo-online turns it off — each phone has exactly one local human, so
+   * there is nobody to hide the hand from.
+   */
+  handoffGate?: boolean;
 }
 
 type ExtendedMoves = BoardProps<GameState>["moves"] & {
@@ -87,12 +93,13 @@ export default function GameBoardPlay({
   theme,
   playerModes = [],
   variant = "base",
+  handoffGate = true,
 }: GameBoardPlayProps) {
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
   const [diceFlash, setDiceFlash] = useState<[number, number] | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [privacyGate, setPrivacyGate] = useState(true);
+  const [privacyGate, setPrivacyGate] = useState(handoffGate);
   const [tradeNotice, setTradeNotice] = useState<string | null>(null);
   // A progress card awaiting its interactive choice (resources/commodities/target).
   const [cardToPlay, setCardToPlay] = useState<ProgressCardType | null>(null);
@@ -167,7 +174,7 @@ export default function GameBoardPlay({
     if (config) saveSnapshot({ config, state: { G, ctx: { currentPlayer: ctx.currentPlayer, phase: ctx.phase, turn: ctx.turn, playOrder: ctx.playOrder, playOrderPos: ctx.playOrderPos } } });
   }, [G, ctx.currentPlayer, ctx.phase, ctx.turn, ctx.playOrder, ctx.playOrderPos]);
 
-  useEffect(() => { setPrivacyGate(canControlCurrent); }, [canControlCurrent, current]);
+  useEffect(() => { setPrivacyGate(handoffGate && canControlCurrent); }, [handoffGate, canControlCurrent, current]);
 
   useEffect(() => {
     if (!G.lastRoll) return;

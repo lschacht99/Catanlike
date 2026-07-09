@@ -329,25 +329,38 @@ export default function HexBoard3D({
   }, [geo.bounds]);
 
   // Harbors: the SAME per-player harbors the trade engine uses (deriveHarbors),
-  // so the docks you see match the 2:1/3:1 rates you actually get. Signs show
-  // the ratio and, for a resource-specific harbor, that resource's short label.
+  // so the docks you see match the 2:1/3:1 rates you actually get. Each boat
+  // carries a large badge: "3:1 ANY" or "2:1 <RESOURCE>" with the resource
+  // icon, plus a tap/hover tooltip explaining the exact trade rule.
   const harbors = useMemo(() => {
     const resColor = (k: ResourceKey) => theme.resources[k]?.color ?? "#c9a24a";
     return deriveHarbors(board).map((h) => {
       const [mx, mz] = world(h.mx, h.my);
       const type = h.type;
       if (type === "generic") {
-        return { mx, mz, label: "3:1", sub: undefined, accent: "#c9a24a" };
+        return {
+          mx,
+          mz,
+          label: "3:1",
+          sub: "ANY",
+          icon: "✳️",
+          accent: "#c9a24a",
+          tip: "3:1 harbor — a settlement or city on this harbor trades any 3 identical resources (or commodities) for 1 card of your choice.",
+        };
       }
+      const name = theme.resources[type]?.label ?? type;
       return {
         mx,
         mz,
         label: "2:1",
-        sub: (theme.resources[type]?.label ?? type).toUpperCase(),
+        sub: name.toUpperCase(),
+        icon: theme.resources[type]?.icon ?? "❔",
         accent: resColor(type),
+        tip: `2:1 ${name} harbor — a settlement or city here trades 2 ${name} for 1 card of your choice. This rate is for ${name} only (never commodities or other resources).`,
       };
     });
   }, [board, world, theme]);
+  const [harborTip, setHarborTip] = useState<string | null>(null);
 
   // Height of each vertex = tallest tile it touches, so pieces sit on the land.
   const vertexY = useMemo(() => {
@@ -451,9 +464,18 @@ export default function HexBoard3D({
           <meshBasicMaterial color="#e8f3fb" transparent opacity={0.5} toneMapped={false} />
         </mesh>
 
-        {/* Harbors on the coast (docks + trade-ratio signs). */}
+        {/* Harbors on the coast (docks + boats carrying trade-rate badges). */}
         {harbors.map((h, i) => (
-          <Harbor key={i} mx={h.mx} mz={h.mz} label={h.label} accent={h.accent} sub={h.sub} />
+          <Harbor
+            key={i}
+            mx={h.mx}
+            mz={h.mz}
+            label={h.label}
+            accent={h.accent}
+            sub={h.sub}
+            icon={h.icon}
+            onHover={(over) => setHarborTip(over ? h.tip : null)}
+          />
         ))}
 
         {/* Terrain tiles. */}
@@ -588,6 +610,13 @@ export default function HexBoard3D({
               return <VertexMarker key={vertexId} x={x} z={z} y={vertexY[vertexId]} onClick={tap(() => onVertexTap(vertexId))} />;
             })}
       </Canvas>
+
+      {/* Harbor tooltip: hover on desktop, press on touch (pointerover). */}
+      {harborTip && (
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 rounded-xl border border-white/20 bg-slate-950/90 p-2 text-center text-[11px] leading-4 text-slate-100 shadow-xl">
+          {harborTip}
+        </div>
+      )}
     </div>
   );
 }
@@ -737,7 +766,23 @@ function Bandit({ top }: { top: number }) {
   );
 }
 
-function Harbor({ mx, mz, label, accent, sub }: { mx: number; mz: number; label: string; accent: string; sub?: string }) {
+function Harbor({
+  mx,
+  mz,
+  label,
+  accent,
+  sub,
+  icon,
+  onHover,
+}: {
+  mx: number;
+  mz: number;
+  label: string;
+  accent: string;
+  sub?: string;
+  icon?: string;
+  onHover?: (over: boolean) => void;
+}) {
   const d = Math.hypot(mx, mz) || 1;
   const nx = mx / d;
   const nz = mz / d;
@@ -746,7 +791,12 @@ function Harbor({ mx, mz, label, accent, sub }: { mx: number; mz: number; label:
   const ox = mx + nx * 0.26;
   const oz = mz + nz * 0.26;
   return (
-    <group position={[ox, SEA_Y, oz]} rotation={[0, -angle, 0]}>
+    <group
+      position={[ox, SEA_Y, oz]}
+      rotation={[0, -angle, 0]}
+      onPointerOver={(e) => { e.stopPropagation(); onHover?.(true); }}
+      onPointerOut={(e) => { e.stopPropagation(); onHover?.(false); }}
+    >
       {/* Dock plank + mooring posts. */}
       <mesh position={[0.2, 0.04, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.5, 0.05, 0.22]} />
@@ -760,7 +810,7 @@ function Harbor({ mx, mz, label, accent, sub }: { mx: number; mz: number; label:
         <cylinderGeometry args={[0.02, 0.02, 0.16, 8]} />
         <meshStandardMaterial color="#5f3d22" roughness={0.8} />
       </mesh>
-      {/* Little moored boat. */}
+      {/* Little moored boat; the sail carries the harbor's accent color. */}
       <group position={[0.64, 0.06, 0]}>
         <mesh castShadow>
           <boxGeometry args={[0.26, 0.08, 0.14]} />
@@ -768,13 +818,15 @@ function Harbor({ mx, mz, label, accent, sub }: { mx: number; mz: number; label:
         </mesh>
         <mesh position={[0, 0.14, 0]} castShadow>
           <coneGeometry args={[0.08, 0.2, 4]} />
-          <meshStandardMaterial color="#f4ead2" roughness={0.7} />
+          <meshStandardMaterial color={accent} roughness={0.7} />
         </mesh>
       </group>
-      {/* Trade-ratio sign lying flat, readable from the angled camera. */}
-      <mesh position={[0.16, 0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.34, 0.34]} />
-        <meshBasicMaterial map={harborTexture(label, accent, sub)} transparent toneMapped={false} />
+      {/* Large trade-rate badge lying flat over the dock — "3:1 ANY" or
+          "2:1 <RESOURCE>" with the resource icon — readable from the
+          default camera without zooming. */}
+      <mesh position={[0.22, 0.15, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]}>
+        <planeGeometry args={[0.52, 0.52]} />
+        <meshBasicMaterial map={harborTexture(label, accent, sub, icon)} transparent toneMapped={false} />
       </mesh>
     </group>
   );

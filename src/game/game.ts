@@ -69,6 +69,14 @@ const PLAY_MOVES = {
 } as const;
 
 const RESET_TURN = ({ G }: { G: GameState }) => {
+  // Duo-online resume: a snapshot can land MID-turn (the opponent rolled and
+  // built, then synced). The first synthetic "turn begin" after rebuilding a
+  // client from such a snapshot must not wipe hasRolled/lastRoll — the guard
+  // flag is set once by createDuoGame's setup and consumed here.
+  if (G._duoSkipTurnReset) {
+    delete G._duoSkipTurnReset;
+    return;
+  }
   G.hasRolled = false;
   G.lastRoll = null;
   G.mustMoveBandit = false;
@@ -213,6 +221,54 @@ export function createResumeGame(
     phases: {
       play: {
         start: true,
+        moves: PLAY_MOVES,
+        turn: {
+          order: {
+            first: () => startPlayOrderPos % Math.max(1, savedG.numPlayers),
+            next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,
+          },
+          onBegin: RESET_TURN,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Duo-online (Firebase-synced) game: each phone rebuilds a local client from
+ * the latest shared snapshot, which — unlike createResumeGame — may land in
+ * EITHER phase and mid-turn. The setup phase's first player is derived from
+ * G.setupStep, and RESET_TURN is skipped exactly once via _duoSkipTurnReset
+ * so a mid-turn snapshot keeps its hasRolled/lastRoll state.
+ */
+export function createDuoGame(
+  savedG: GameState,
+  startPhase: "setup" | "play",
+  startPlayOrderPos: number,
+): Game<GameState> {
+  return {
+    name: "hamsa-nomads",
+    setup: () => ({ ...savedG, _duoSkipTurnReset: true }),
+    endIf: END_IF,
+    phases: {
+      setup: {
+        start: startPhase === "setup",
+        moves: { placeSettlement, placeRoad },
+        turn: {
+          order: {
+            first: ({ G }) =>
+              G.setupStep >= 2 * G.numPlayers ? 0 : setupOrder(G.numPlayers, G.setupStep),
+            next: ({ G }) => {
+              if (G.setupStep >= 2 * G.numPlayers) return undefined;
+              return setupOrder(G.numPlayers, G.setupStep);
+            },
+          },
+        },
+        endIf: ({ G }) => G.setupStep >= 2 * G.numPlayers,
+        next: "play",
+      },
+      play: {
+        start: startPhase === "play",
         moves: PLAY_MOVES,
         turn: {
           order: {

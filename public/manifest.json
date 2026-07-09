@@ -1,8 +1,9 @@
 {
   "name": "Hamsa Nomads",
   "short_name": "Hamsa",
-  "description": "Build · Trade · Explore — a themeable hex-board trading game.",
-  "start_url": "/",
+  "description": "Build · Trade · Explore — a themeable hex-board trading game. Play online with one friend, free.",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f2ead9",
@@ -13,6 +14,12 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "hamsa-logo-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

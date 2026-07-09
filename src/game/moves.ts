@@ -9,7 +9,6 @@ import type {
   ResourceCounts,
   ResourceKey,
 } from "@/types/game";
-import type { TradeCardKey } from "./maritime";
 import { COMMODITY_KEYS } from "@/types/game";
 import {
   BANK_TRADE_RATE,
@@ -48,7 +47,6 @@ import {
   validSettlementSpots,
 } from "./rules";
 import { updateLargestArmy, updateLongestRoad } from "./scoring";
-import { bestMaritimeTradeOption, moveCard } from "./maritime";
 
 const RESOURCES: ResourceKey[] = ["wood", "brick", "grain", "wool", "ore"];
 const TRACKS: ProgressTrackKey[] = ["trade", "politics", "science"];

@@ -1,16 +1,101 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Sky, MeshWobbleMaterial } from "@react-three/drei";
-import type { Group } from "three";
+import * as THREE from "three";
+import type { Group, Texture } from "three";
 import type { Board, Building, ResourceKey, TileResource } from "@/types/game";
-import type { Theme } from "@/types/theme";
-import { PLAYER_COLORS } from "@/game/constants";
+import type { ResourceTheme, Theme } from "@/types/theme";
+import { PLAYER_COLORS, RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import { buildGeometry, HEX_SIZE } from "@/game/geometry";
 import { deriveHarbors } from "@/game/harbors";
 import { tokenTexture } from "./board3d/tokenTexture";
 import { harborTexture } from "./board3d/harborTexture";
+
+/** Bundled tile art (or a theme's own image) resolved the same way HexBoardPlay
+ *  resolves it: an absolute image URL wins, else the bundled SVG under the
+ *  configured basePath — so it loads correctly both in dev and on GitHub Pages. */
+function resolveArtUrl(style: ResourceTheme): string | null {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  return style.image ?? (style.tileArt ? `${basePath}${style.tileArt}` : null);
+}
+
+/** Module-level texture cache so every board instance reuses the same GPU
+ *  texture for a given art URL — cheap, and survives remounts. */
+const tileTextureCache = new Map<string, Texture>();
+const tileTexturePending = new Set<string>();
+
+/** Loads (and caches) the distinct tile-art textures a theme needs, without
+ *  Suspense: a small re-render fires once each image decodes. Missing/absent
+ *  art (e.g. a color-only theme) simply yields no entry — the tile then keeps
+ *  its plain colored top, no different from before this patch. */
+function useTileArtTextures(urls: string[]): Record<string, Texture> {
+  const [, force] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    for (const url of urls) {
+      if (tileTextureCache.has(url) || tileTexturePending.has(url)) continue;
+      tileTexturePending.add(url);
+      new THREE.TextureLoader().load(
+        url,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = 4;
+          tileTextureCache.set(url, tex);
+          tileTexturePending.delete(url);
+          if (!cancelled) force((n) => n + 1);
+        },
+        undefined,
+        () => tileTexturePending.delete(url),
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urls.join("|")]);
+  const out: Record<string, Texture> = {};
+  for (const url of urls) {
+    const tex = tileTextureCache.get(url);
+    if (tex) out[url] = tex;
+  }
+  return out;
+}
+
+/**
+ * A flat, pointy-top hex fan at unit radius, lying in the XZ (ground) plane.
+ * Its corners use the exact same angle formula as `hexCorners()` in
+ * geometry.ts (60°·i − 90°, starting at the "north" point) — the same
+ * convention every world position in this scene already derives from — so a
+ * mesh built from this geometry always lines up with the tile beneath it,
+ * with no dependency on how CylinderGeometry happens to UV its own cap.
+ *
+ * UVs map each corner to its position inside the hex's own bounding square,
+ * mirroring exactly how the 2D board (HexBoard.tsx) already draws tile art:
+ * a square image is placed over the hex's bounding box and clipped to the
+ * hex outline. Built once and shared by every tile on every board.
+ */
+const HEX_CAP_GEOMETRY = (() => {
+  const HALF_W = Math.sqrt(3) / 2; // half-width of a unit pointy-top hex
+  const positions: number[] = [0, 0, 0];
+  const uvs: number[] = [0.5, 0.5];
+  for (let i = 0; i <= 6; i++) {
+    const angle = (Math.PI / 180) * (60 * (i % 6) - 90);
+    const x = Math.cos(angle);
+    const zc = Math.sin(angle);
+    positions.push(x, 0, zc);
+    uvs.push(x / (2 * HALF_W) + 0.5, 0.5 - zc / 2);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  const indices: number[] = [];
+  for (let i = 1; i <= 6; i++) indices.push(0, i, i + 1);
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+})();
 
 /** SVG board units → world units. A hex ends up ~1 unit in radius. */
 const SCALE = 0.1;
@@ -74,6 +159,20 @@ export default function HexBoard3D({
   className = "",
 }: HexBoard3DProps) {
   const geo = useMemo(() => buildGeometry(board.tiles), [board.tiles]);
+
+  // Distinct tile-art URLs this theme actually needs (a color-only theme
+  // yields none, and every tile just keeps its plain colored top).
+  const artUrls = useMemo(() => {
+    const urls = new Set<string>();
+    for (const key of RESOURCE_KEYS_ORDERED) {
+      const url = resolveArtUrl(theme.resources[key]);
+      if (url) urls.add(url);
+    }
+    const desertUrl = resolveArtUrl(theme.desert);
+    if (desertUrl) urls.add(desertUrl);
+    return [...urls];
+  }, [theme]);
+  const artTextures = useTileArtTextures(artUrls);
 
   // Recenter the board on the origin using its bounding box.
   const { cx, cz } = useMemo(() => {
@@ -225,6 +324,8 @@ export default function HexBoard3D({
           const h = tileHeight(tile.resource);
           const style = tile.resource === "desert" ? theme.desert : theme.resources[tile.resource];
           const highlighted = ht.has(tile.id);
+          const artUrl = resolveArtUrl(style);
+          const artTexture = artUrl ? artTextures[artUrl] : undefined;
           return (
             <group key={tile.id} position={[x, 0, z]}>
               <mesh
@@ -242,6 +343,29 @@ export default function HexBoard3D({
                   emissiveIntensity={highlighted ? 0.4 : 0}
                 />
               </mesh>
+
+              {/* Uploaded SVG art, laid flat just above the cylinder's top
+                  cap and clipped to the same hex the tile itself uses — never
+                  a visible square. The colored cylinder underneath still
+                  shows through the sides. */}
+              {artTexture && (
+                <mesh
+                  position={[0, h + 0.006, 0]}
+                  scale={[HEX_R * 0.96, 1, HEX_R * 0.96]}
+                  geometry={HEX_CAP_GEOMETRY}
+                  receiveShadow
+                  onClick={onTileTap && highlighted ? tap(() => onTileTap(tile.id)) : undefined}
+                >
+                  <meshStandardMaterial
+                    map={artTexture}
+                    roughness={0.85}
+                    metalness={0.02}
+                    side={THREE.DoubleSide}
+                    emissive={highlighted ? "#f59e0b" : "#000000"}
+                    emissiveIntensity={highlighted ? 0.4 : 0}
+                  />
+                </mesh>
+              )}
 
               {/* Number token, lying flat on the tile top. */}
               {tile.token !== null && (
@@ -518,36 +642,180 @@ function Harbor({ mx, mz, label, accent, sub }: { mx: number; mz: number; label:
   );
 }
 
-function Decor({ resource, seed, top }: { resource: TileResource; seed: number; top: number }) {
-  const items = useMemo(() => {
-    const out: { x: number; z: number; kind: "tree" | "peak" }[] = [];
-    if (resource !== "wood" && resource !== "ore") return out;
-    const count = resource === "wood" ? 3 : 2;
-    for (let i = 0; i < count; i++) {
-      const a = seeded(seed * 7 + i * 13) * Math.PI * 2;
-      const rad = 0.4 + seeded(seed * 3 + i * 5) * 0.28;
-      out.push({ x: Math.cos(a) * rad, z: Math.sin(a) * rad, kind: resource === "wood" ? "tree" : "peak" });
-    }
-    return out;
-  }, [resource, seed]);
+/** How many low-poly decor items each terrain scatters, and which kinds
+ *  alternate (by placement index) so a tile doesn't look identical every time. */
+const DECOR_PLAN: Partial<Record<TileResource, string[]>> = {
+  wood: ["tree", "tree", "tree"],
+  ore: ["peak", "workshop"],
+  brick: ["kiln", "clayStack"],
+  grain: ["crate", "sheaf", "crate"],
+  wool: ["tent", "sheep"],
+  desert: ["dune", "stone"],
+};
 
+interface DecorSpec {
+  x: number;
+  z: number;
+  kind: string;
+  rot: number;
+  scale: number;
+}
+
+/** Cheap, deterministic scatter — same seed always yields the same layout. */
+function buildDecor(resource: TileResource, seed: number): DecorSpec[] {
+  const kinds = DECOR_PLAN[resource];
+  if (!kinds) return [];
+  return kinds.map((kind, i) => {
+    const a = seeded(seed * 7 + i * 13) * Math.PI * 2;
+    const rad = 0.36 + seeded(seed * 3 + i * 5) * 0.3;
+    return {
+      x: Math.cos(a) * rad,
+      z: Math.sin(a) * rad,
+      kind,
+      rot: seeded(seed * 11 + i * 17) * Math.PI * 2,
+      scale: 0.85 + seeded(seed * 19 + i * 23) * 0.3,
+    };
+  });
+}
+
+/** One decor item. No castShadow — these are small and numerous (up to
+ *  19 tiles x 3), so skipping shadow-casting on them keeps mobile cheap;
+ *  they still receive shadows from buildings/roads via the tile beneath. */
+function DecorItem({ kind, rot, scale }: { kind: string; rot: number; scale: number }) {
+  switch (kind) {
+    case "tree":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.06, 0]}>
+            <cylinderGeometry args={[0.02, 0.03, 0.12, 5]} />
+            <meshStandardMaterial color="#6b4a2c" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.24, 0]}>
+            <coneGeometry args={[0.13, 0.3, 7]} />
+            <meshStandardMaterial color="#5f7a3d" roughness={0.9} />
+          </mesh>
+        </group>
+      );
+    case "peak":
+      return (
+        <mesh position={[0, 0.15, 0]} rotation={[0, rot, 0]} scale={scale}>
+          <coneGeometry args={[0.16, 0.3, 6]} />
+          <meshStandardMaterial color="#6b7280" roughness={0.95} />
+        </mesh>
+      );
+    case "workshop":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.08, 0]}>
+            <boxGeometry args={[0.22, 0.16, 0.18]} />
+            <meshStandardMaterial color="#8a7452" roughness={0.6} metalness={0.35} />
+          </mesh>
+          <mesh position={[0, 0.19, 0]}>
+            <cylinderGeometry args={[0.05, 0.05, 0.06, 8]} />
+            <meshStandardMaterial color="#c9a24a" roughness={0.4} metalness={0.7} />
+          </mesh>
+        </group>
+      );
+    case "kiln":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.09, 0]}>
+            <cylinderGeometry args={[0.13, 0.15, 0.18, 8]} />
+            <meshStandardMaterial color="#a4552f" roughness={0.85} />
+          </mesh>
+          <mesh position={[0.02, 0.24, 0]}>
+            <cylinderGeometry args={[0.03, 0.04, 0.14, 6]} />
+            <meshStandardMaterial color="#5c4636" roughness={0.85} />
+          </mesh>
+        </group>
+      );
+    case "clayStack":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.05, 0]}>
+            <boxGeometry args={[0.2, 0.1, 0.16]} />
+            <meshStandardMaterial color="#b96a4a" roughness={0.85} />
+          </mesh>
+          <mesh position={[0.02, 0.14, -0.01]} rotation={[0, 0.3, 0]}>
+            <boxGeometry args={[0.16, 0.08, 0.13]} />
+            <meshStandardMaterial color="#9c5a3f" roughness={0.85} />
+          </mesh>
+        </group>
+      );
+    case "crate":
+      return (
+        <mesh position={[0, 0.07, 0]} rotation={[0, rot, 0]} scale={scale}>
+          <boxGeometry args={[0.16, 0.14, 0.16]} />
+          <meshStandardMaterial color="#c9a24a" roughness={0.8} />
+        </mesh>
+      );
+    case "sheaf":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.03, 0]}>
+            <cylinderGeometry args={[0.05, 0.06, 0.06, 8]} />
+            <meshStandardMaterial color="#a4552f" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, 0.19, 0]}>
+            <coneGeometry args={[0.09, 0.28, 8]} />
+            <meshStandardMaterial color="#d9b54f" roughness={0.75} />
+          </mesh>
+        </group>
+      );
+    case "tent":
+      return (
+        <mesh position={[0, 0.09, 0]} rotation={[0, rot, 0]} scale={scale}>
+          <coneGeometry args={[0.2, 0.2, 4]} />
+          <meshStandardMaterial color="#8aa67b" roughness={0.85} />
+        </mesh>
+      );
+    case "sheep":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.09, 0]}>
+            <sphereGeometry args={[0.11, 10, 8]} />
+            <meshStandardMaterial color="#f4ead2" roughness={0.95} />
+          </mesh>
+          <mesh position={[0.13, 0.07, 0]}>
+            <sphereGeometry args={[0.06, 8, 8]} />
+            <meshStandardMaterial color="#3a2f28" roughness={0.9} />
+          </mesh>
+        </group>
+      );
+    case "dune":
+      return (
+        <mesh position={[0, 0.04, 0]} rotation={[0, rot, 0]} scale={[scale * 1.4, scale * 0.4, scale * 1.1]}>
+          <sphereGeometry args={[0.18, 10, 8]} />
+          <meshStandardMaterial color="#e3cd97" roughness={1} />
+        </mesh>
+      );
+    case "stone":
+      return (
+        <group rotation={[0, rot, 0]} scale={scale}>
+          <mesh position={[0, 0.08, 0]}>
+            <boxGeometry args={[0.12, 0.16, 0.1]} />
+            <meshStandardMaterial color="#8f9aa8" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.17, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.045, 16]} />
+            <meshStandardMaterial color="#c9a24a" roughness={0.5} metalness={0.5} />
+          </mesh>
+        </group>
+      );
+    default:
+      return null;
+  }
+}
+
+function Decor({ resource, seed, top }: { resource: TileResource; seed: number; top: number }) {
+  const items = useMemo(() => buildDecor(resource, seed), [resource, seed]);
   return (
     <>
-      {items.map((it, i) =>
-        it.kind === "tree" ? (
-          <group key={i} position={[it.x, top, it.z]}>
-            <mesh position={[0, 0.16, 0]} castShadow>
-              <coneGeometry args={[0.12, 0.32, 7]} />
-              <meshStandardMaterial color="#2f6d3f" roughness={0.9} />
-            </mesh>
-          </group>
-        ) : (
-          <mesh key={i} position={[it.x, top + 0.12, it.z]} castShadow>
-            <coneGeometry args={[0.16, 0.3, 6]} />
-            <meshStandardMaterial color="#6b7280" roughness={0.95} />
-          </mesh>
-        ),
-      )}
+      {items.map((it, i) => (
+        <group key={i} position={[it.x, top, it.z]}>
+          <DecorItem kind={it.kind} rot={it.rot} scale={it.scale} />
+        </group>
+      ))}
     </>
   );
 }

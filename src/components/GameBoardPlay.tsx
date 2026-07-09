@@ -39,6 +39,7 @@ import {
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
 import { botProposeTrade } from "@/game/ai/trade";
+import { maritimeTradeOptions } from "@/game/maritime";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
@@ -438,6 +439,8 @@ export default function GameBoardPlay({
           theme={theme}
           resources={resources}
           bankRate={G.tradeRate ?? BANK_TRADE_RATE}
+          commodities={G.players[current]?.commodities}
+          bankOptions={maritimeTradeOptions(G, current)}
           rivals={rivals}
           onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade ${G.tradeRate ?? BANK_TRADE_RATE} ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
           onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => {

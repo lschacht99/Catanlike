@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { ResourceKey } from "@/types/game";
+import type { CommodityKey, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
-import { BANK_TRADE_RATE, RESOURCE_KEYS_ORDERED } from "@/game/constants";
+import { BANK_TRADE_RATE, COMMODITY_ICONS, COMMODITY_LABELS, COMMODITY_KEYS_ORDERED, RESOURCE_KEYS_ORDERED } from "@/game/constants";
+import type { MaritimeTradeOption, TradeCardKey } from "@/game/maritime";
 import Sheet from "./Sheet";
 
 /** Only PUBLIC information about a rival is passed in — never their hand. */
@@ -18,10 +19,12 @@ export interface RivalInfo {
 interface TradePanelProps {
   theme: Theme;
   resources: Record<ResourceKey, number>;
-  /** Bank rate for this turn (Merchant card can lower it). */
+  commodities?: Record<CommodityKey, number>;
+  bankOptions?: MaritimeTradeOption[];
+  /** Bank rate for this turn (legacy fallback). */
   bankRate?: number;
   rivals?: RivalInfo[];
-  onTrade: (give: ResourceKey, receive: ResourceKey) => void;
+  onTrade: (give: TradeCardKey, receive: TradeCardKey) => void;
   onPlayerTrade?: (
     targetPlayer: string,
     give: ResourceKey,
@@ -40,14 +43,16 @@ export default function TradePanel({
   theme,
   resources,
   bankRate = BANK_TRADE_RATE,
+  commodities = { paper: 0, coin: 0, cloth: 0 },
+  bankOptions,
   rivals = [],
   onTrade,
   onPlayerTrade,
   onClose,
 }: TradePanelProps) {
   const [mode, setMode] = useState<TradeMode>("bank");
-  const [give, setGive] = useState<ResourceKey | null>(null);
-  const [receive, setReceive] = useState<ResourceKey | null>(null);
+  const [give, setGive] = useState<TradeCardKey | null>(null);
+  const [receive, setReceive] = useState<TradeCardKey | null>(null);
   const [targetPlayer, setTargetPlayer] = useState<string | null>(null);
   const [giveAmount, setGiveAmount] = useState(1);
   const [receiveAmount, setReceiveAmount] = useState(1);
@@ -58,8 +63,17 @@ export default function TradePanel({
     ? rivals.find((r) => r.id === targetPlayer)?.cardCount ?? 0
     : 0;
 
+  const optionFor = (from: TradeCardKey | null, to: TradeCardKey | null) =>
+    from && to ? bankOptions?.find((o) => o.give === from && o.receive === to) ?? null : null;
+  const selectedOption = optionFor(give, receive);
+  const countFor = (card: TradeCardKey) =>
+    (RESOURCE_KEYS_ORDERED as TradeCardKey[]).includes(card) ? resources[card as ResourceKey] : commodities[card as CommodityKey];
+  const labelFor = (card: TradeCardKey) =>
+    (RESOURCE_KEYS_ORDERED as TradeCardKey[]).includes(card) ? theme.resources[card as ResourceKey].label : COMMODITY_LABELS[card as CommodityKey];
+  const iconFor = (card: TradeCardKey) =>
+    (RESOURCE_KEYS_ORDERED as TradeCardKey[]).includes(card) ? theme.resources[card as ResourceKey].icon : COMMODITY_ICONS[card as CommodityKey];
   const canBankConfirm =
-    give !== null && receive !== null && give !== receive && resources[give] >= bankRate;
+    give !== null && receive !== null && give !== receive && (selectedOption ? countFor(give) >= selectedOption.rate : resources[give as ResourceKey] >= bankRate);
   // The proposer can only gate on their OWN ability to pay — never the target's.
   const canPlayerConfirm =
     !!onPlayerTrade &&
@@ -67,7 +81,7 @@ export default function TradePanel({
     give !== null &&
     receive !== null &&
     give !== receive &&
-    resources[give] >= giveAmount &&
+    (RESOURCE_KEYS_ORDERED as TradeCardKey[]).includes(give) && resources[give as ResourceKey] >= giveAmount &&
     giveAmount >= 1 &&
     receiveAmount >= 1;
 
@@ -78,18 +92,18 @@ export default function TradePanel({
     disabledFor,
   }: {
     title: string;
-    selected: ResourceKey | null;
-    onSelect: (r: ResourceKey) => void;
-    disabledFor: (r: ResourceKey) => boolean;
+    selected: TradeCardKey | null;
+    onSelect: (r: TradeCardKey) => void;
+    disabledFor: (r: TradeCardKey) => boolean;
   }) {
     return (
       <div>
         <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-soft">
           {title}
         </p>
-        <div className="grid grid-cols-5 gap-1.5">
-          {RESOURCE_KEYS_ORDERED.map((key) => {
-            const style = theme.resources[key];
+        <div className="grid grid-cols-4 gap-1.5">
+          {[...RESOURCE_KEYS_ORDERED, ...COMMODITY_KEYS_ORDERED].map((key) => {
+            const style = { icon: iconFor(key), label: labelFor(key) };
             const active = selected === key;
             return (
               <button
@@ -170,10 +184,10 @@ export default function TradePanel({
       {mode === "bank" ? (
         <div className="space-y-4">
           <Row
-            title={`You give ${bankRate}`}
+            title={`You give ${selectedOption?.rate ?? bankRate}`}
             selected={give}
             onSelect={setGive}
-            disabledFor={(r) => resources[r] < bankRate}
+            disabledFor={(r) => { const option = bankOptions?.find((o) => o.give === r); return option ? countFor(r) < option.rate : countFor(r) < bankRate; }}
           />
           <div className="flex justify-center text-ink-soft">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -184,7 +198,7 @@ export default function TradePanel({
             title="You get 1"
             selected={receive}
             onSelect={setReceive}
-            disabledFor={(r) => r === give}
+            disabledFor={(r) => r === give || (bankOptions ? !optionFor(give, r) : false)}
           />
           <button
             disabled={!canBankConfirm}
@@ -193,8 +207,9 @@ export default function TradePanel({
             }}
             className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"
           >
-            Trade {bankRate} : 1
+            Trade {selectedOption?.rate ?? bankRate} : 1
           </button>
+          <p className="text-[11px] leading-4 text-ink-faint">{selectedOption?.reason ?? "Default market trade: 4 identical resources for 1 resource."}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -230,17 +245,17 @@ export default function TradePanel({
               setGive(r);
               setGiveAmount(1);
             }}
-            disabledFor={(r) => resources[r] < 1}
+            disabledFor={(r) => !(RESOURCE_KEYS_ORDERED as TradeCardKey[]).includes(r) || resources[r as ResourceKey] < 1}
           />
           {give && (
             <div className="flex items-center justify-between rounded-2xl border border-line bg-cream px-3 py-2">
               <span className="text-xs font-semibold text-ink-soft">
-                Amount ({resources[give]} in hand)
+                Amount ({resources[give as ResourceKey]} in hand)
               </span>
               <Stepper
                 value={giveAmount}
                 onChange={setGiveAmount}
-                max={Math.min(MAX_OFFER, resources[give])}
+                max={Math.min(MAX_OFFER, resources[give as ResourceKey])}
                 label="give amount"
               />
             </div>
@@ -252,7 +267,7 @@ export default function TradePanel({
               setReceive(r);
               setReceiveAmount(1);
             }}
-            disabledFor={(r) => r === give}
+            disabledFor={(r) => r === give || !(RESOURCE_KEYS_ORDERED as TradeCardKey[]).includes(r)}
           />
           {receive && targetPlayer && (
             <div className="rounded-2xl border border-line bg-cream px-3 py-2">
@@ -267,7 +282,7 @@ export default function TradePanel({
             disabled={!canPlayerConfirm}
             onClick={() => {
               if (targetPlayer && give && receive && onPlayerTrade) {
-                onPlayerTrade(targetPlayer, give, giveAmount, receive, receiveAmount);
+                onPlayerTrade(targetPlayer, give as ResourceKey, giveAmount, receive as ResourceKey, receiveAmount);
               }
             }}
             className="w-full rounded-full bg-ink py-3.5 text-sm font-bold uppercase tracking-[0.2em] text-cream disabled:opacity-40"

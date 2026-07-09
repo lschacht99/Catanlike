@@ -18,6 +18,7 @@ import {
 } from "@/game/rules";
 import { longestRoadLength, publicPoints, victoryPoints } from "@/game/scoring";
 import { recordResult } from "@/lib/profile";
+import { maritimeTradeOptions } from "@/game/maritime";
 import HexBoard from "./HexBoard";
 import PlayerHand from "./PlayerHand";
 import BuildSheet from "./BuildMenu";
@@ -354,7 +355,9 @@ export default function GameBoard({
         <TradePanel
           theme={theme}
           resources={resources}
-          onTrade={(give: ResourceKey, receive: ResourceKey) => moves.bankTrade(give, receive)}
+          commodities={G.players[viewer]?.commodities}
+          bankOptions={maritimeTradeOptions(G, viewer)}
+          onTrade={(give, receive) => moves.bankTrade(give, receive)}
           onClose={() => setSheet(null)}
         />
       )}

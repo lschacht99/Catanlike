@@ -44,6 +44,7 @@ import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizeP
 import { saveSnapshot } from "@/lib/save-game";
 import { saveGame } from "@/lib/savegame";
 import BoardStage from "./BoardStage";
+import DiceRoll from "./DiceRoll";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel, { type RivalInfo } from "./TradePanel";
@@ -335,12 +336,7 @@ export default function GameBoardPlay({
       {diceFlash && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center">
           <div className="dice-popup rounded-3xl border border-white/15 bg-slate-950/90 px-7 py-6 text-center shadow-2xl backdrop-blur">
-            <div className="flex gap-3 text-5xl">
-              <span className="dice-face">{diceFlash[0]}</span>
-              <span className="dice-face">{diceFlash[1]}</span>
-            </div>
-            <p className="mt-3 text-sm font-bold text-yellow-300">Rolled {diceFlash[0] + diceFlash[1]}</p>
-            {variant === "cities-knights" && G.lastEventDie && <p className="mt-1 text-xs text-white/60">Event: {G.lastEventDie}</p>}
+            <DiceRoll roll={diceFlash} eventDie={variant === "cities-knights" ? G.lastEventDie ?? null : null} />
           </div>
         </div>
       )}

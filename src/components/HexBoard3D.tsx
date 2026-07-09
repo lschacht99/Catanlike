@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useRef } from "react";
-import { Canvas, type ThreeEvent } from "@react-three/fiber";
+import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+import type { Group } from "three";
 import type { Board, Building, TileResource } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
@@ -374,17 +375,28 @@ function BuildingMesh({
 }
 
 function VertexMarker({ x, z, y, onClick }: { x: number; z: number; y: number; onClick?: (e: ThreeEvent<MouseEvent>) => void }) {
+  const ring = useRef<Group>(null);
+  // Gentle bob + breathing scale so valid moves read as "alive" without noise.
+  useFrame((state) => {
+    if (!ring.current) return;
+    const t = state.clock.elapsedTime * 2.4 + x + z;
+    ring.current.position.y = y + 0.16 + Math.sin(t) * 0.03;
+    const s = 1 + Math.sin(t) * 0.12;
+    ring.current.scale.set(s, s, s);
+  });
   return (
     <group position={[x, y + 0.14, z]} onClick={onClick}>
-      {/* Large invisible tap target. */}
+      {/* Large invisible tap target (steady, so taps stay easy). */}
       <mesh>
-        <sphereGeometry args={[0.28, 10, 10]} />
+        <sphereGeometry args={[0.3, 10, 10]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.14, 0.04, 10, 24]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.6} roughness={0.4} />
-      </mesh>
+      <group ref={ring}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.14, 0.04, 10, 24]} />
+          <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.7} roughness={0.4} />
+        </mesh>
+      </group>
     </group>
   );
 }

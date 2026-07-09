@@ -19,6 +19,7 @@ import {
 import { maritimeRate, playerHarborTypes } from "@/game/harbors";
 import { longestRoadLength, publicPoints, victoryPoints } from "@/game/scoring";
 import { recordResult } from "@/lib/profile";
+import { maritimeTradeOptions } from "@/game/maritime";
 import HexBoard from "./HexBoard";
 import PlayerHand from "./PlayerHand";
 import BuildSheet from "./BuildMenu";

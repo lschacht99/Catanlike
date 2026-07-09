@@ -1,5 +1,6 @@
 import type { Difficulty, GameState, ResourceKey, TradeOffer } from "@/types/game";
 import { BUILD_COSTS } from "../constants";
+import { maritimeRate } from "../harbors";
 import { publicPoints } from "../scoring";
 
 export type Rng = () => number;
@@ -105,6 +106,43 @@ export function evaluateTradeOffer(
   if (net >= 0.9) return { accept: true, reason: "Needs those resources." };
   if (net >= tune.acceptThreshold) return { accept: true, reason: "A fair exchange." };
   return { accept: false, reason: "Not a good deal." };
+}
+
+/**
+ * On its turn, a bot may bank-trade to complete a build it is one resource
+ * short of, using its OWN best legal maritime rate (per-player harbors). It
+ * only trades away a resource that is genuinely surplus — never one it still
+ * needs for the same build. Returns null when no worthwhile conversion exists.
+ */
+export function planBankTrade(
+  G: GameState,
+  bot: string,
+): { give: ResourceKey; receive: ResourceKey } | null {
+  const hand = G.players[bot].resources;
+  const hasUpgradeable = Object.values(G.buildings).some((b) => b.player === bot && !b.city);
+  const goals = hasUpgradeable
+    ? [BUILD_COSTS.city, BUILD_COSTS.settlement, BUILD_COSTS.road]
+    : [BUILD_COSTS.settlement, BUILD_COSTS.road];
+
+  for (const goal of goals) {
+    const shortfalls = RESOURCES.filter((r) => (goal[r] ?? 0) > hand[r]);
+    // Only fix a single-resource, single-card shortfall — deeper gaps aren't
+    // worth burning a 4:1 (or better) trade on.
+    if (shortfalls.length !== 1) continue;
+    const want = shortfalls[0];
+    if ((goal[want] ?? 0) - hand[want] !== 1) continue;
+
+    let best: { give: ResourceKey; rate: number } | null = null;
+    for (const r of RESOURCES) {
+      if (r === want) continue;
+      // Keep whatever this goal itself still needs of r.
+      const spare = hand[r] - (goal[r] ?? 0);
+      const rate = maritimeRate(G, bot, r);
+      if (spare >= rate && (!best || rate < best.rate)) best = { give: r, rate };
+    }
+    if (best) return { give: best.give, receive: want };
+  }
+  return null;
 }
 
 /**

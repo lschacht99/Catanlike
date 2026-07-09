@@ -8,6 +8,7 @@ import type { Board, Building, ResourceKey, TileResource } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { PLAYER_COLORS } from "@/game/constants";
 import { buildGeometry, HEX_SIZE } from "@/game/geometry";
+import { deriveHarbors } from "@/game/harbors";
 import { tokenTexture } from "./board3d/tokenTexture";
 import { harborTexture } from "./board3d/harborTexture";
 
@@ -90,43 +91,26 @@ export default function HexBoard3D({
     return (Math.max(maxX - minX, maxY - minY) / 2) * SCALE + HEX_R * 0.55;
   }, [geo.bounds]);
 
-  // Harbors: derived visually from coastal edges (edges touching exactly one tile).
-  // Purely cosmetic — no trade-rule change. Standard 4×(3:1) + 5×(2:1) spread evenly.
+  // Harbors: the SAME per-player harbors the trade engine uses (deriveHarbors),
+  // so the docks you see match the 2:1/3:1 rates you actually get. Signs show
+  // the ratio and, for a resource-specific harbor, that resource's short label.
   const harbors = useMemo(() => {
     const resColor = (k: ResourceKey) => theme.resources[k]?.color ?? "#c9a24a";
-    const coastal = Object.values(geo.edges)
-      .map((e) => {
-        const a = geo.vertices[e.a];
-        const b = geo.vertices[e.b];
-        if (!a || !b) return null;
-        const shared = a.tiles.filter((t) => b.tiles.includes(t));
-        if (shared.length !== 1) return null;
-        const [ax, az] = world(a.x, a.y);
-        const [bx, bz] = world(b.x, b.y);
-        const mx = (ax + bx) / 2;
-        const mz = (az + bz) / 2;
-        return { mx, mz, ang: Math.atan2(mz, mx) };
-      })
-      .filter((v): v is { mx: number; mz: number; ang: number } => v !== null)
-      .sort((p, q) => p.ang - q.ang);
-    if (!coastal.length) return [];
-    const TYPES = [
-      { label: "3:1", accent: "#c9a24a" },
-      { label: "2:1", accent: resColor("wood") },
-      { label: "3:1", accent: "#c9a24a" },
-      { label: "2:1", accent: resColor("brick") },
-      { label: "2:1", accent: resColor("grain") },
-      { label: "3:1", accent: "#c9a24a" },
-      { label: "2:1", accent: resColor("wool") },
-      { label: "2:1", accent: resColor("ore") },
-      { label: "3:1", accent: "#c9a24a" },
-    ];
-    const n = Math.min(9, coastal.length);
-    return Array.from({ length: n }, (_, i) => {
-      const spot = coastal[Math.floor((i * coastal.length) / n)];
-      return { ...spot, ...TYPES[i] };
+    return deriveHarbors(board).map((h) => {
+      const [mx, mz] = world(h.mx, h.my);
+      const type = h.type;
+      if (type === "generic") {
+        return { mx, mz, label: "3:1", sub: undefined, accent: "#c9a24a" };
+      }
+      return {
+        mx,
+        mz,
+        label: "2:1",
+        sub: (theme.resources[type]?.label ?? type).toUpperCase(),
+        accent: resColor(type),
+      };
     });
-  }, [geo.edges, geo.vertices, world, theme]);
+  }, [board, world, theme]);
 
   // Height of each vertex = tallest tile it touches, so pieces sit on the land.
   const vertexY = useMemo(() => {
@@ -232,7 +216,7 @@ export default function HexBoard3D({
 
         {/* Harbors on the coast (docks + trade-ratio signs). */}
         {harbors.map((h, i) => (
-          <Harbor key={i} mx={h.mx} mz={h.mz} label={h.label} accent={h.accent} />
+          <Harbor key={i} mx={h.mx} mz={h.mz} label={h.label} accent={h.accent} sub={h.sub} />
         ))}
 
         {/* Terrain tiles. */}
@@ -491,7 +475,7 @@ function Bandit({ top }: { top: number }) {
   );
 }
 
-function Harbor({ mx, mz, label, accent }: { mx: number; mz: number; label: string; accent: string }) {
+function Harbor({ mx, mz, label, accent, sub }: { mx: number; mz: number; label: string; accent: string; sub?: string }) {
   const d = Math.hypot(mx, mz) || 1;
   const nx = mx / d;
   const nz = mz / d;
@@ -528,7 +512,7 @@ function Harbor({ mx, mz, label, accent }: { mx: number; mz: number; label: stri
       {/* Trade-ratio sign lying flat, readable from the angled camera. */}
       <mesh position={[0.16, 0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[0.34, 0.34]} />
-        <meshBasicMaterial map={harborTexture(label, accent)} transparent toneMapped={false} />
+        <meshBasicMaterial map={harborTexture(label, accent, sub)} transparent toneMapped={false} />
       </mesh>
     </group>
   );

@@ -38,7 +38,8 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
-import { botProposeTrade } from "@/game/ai/trade";
+import { botProposeTrade, planBankTrade } from "@/game/ai/trade";
+import { hasMerchantGuild, maritimeRate, playerHarborTypes } from "@/game/harbors";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
@@ -291,6 +292,13 @@ export default function GameBoardPlay({
         moves.buildRoad(road);
         return;
       }
+      // Nothing affordable to build: bank-trade toward a needed card at the
+      // bot's OWN best legal maritime rate (per-player harbors), then retry.
+      const swap = planBankTrade(G, current);
+      if (swap) {
+        moves.bankTrade(swap.give, swap.receive);
+        return;
+      }
       moves.endTurn();
     }, inSetup ? 420 : 650);
     return () => window.clearTimeout(timer);
@@ -437,9 +445,13 @@ export default function GameBoardPlay({
         <TradePanel
           theme={theme}
           resources={resources}
-          bankRate={G.tradeRate ?? BANK_TRADE_RATE}
+          commodities={commodities}
+          variant={variant}
+          rateFor={(give) => maritimeRate(G, current, give)}
+          ownedHarbors={[...playerHarborTypes(G, current)]}
+          merchantGuild={hasMerchantGuild(G, current)}
           rivals={rivals}
-          onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade ${G.tradeRate ?? BANK_TRADE_RATE} ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
+          onTrade={(give, receive) => { const r = maritimeRate(G, current, give); setShowTrade(false); ask("Confirm bank trade", `Trade ${r} ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
           onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => {
             // The engine settles bot targets immediately (surfacing a result banner)
             // and parks a human offer in pendingTrade for the private review flow.

@@ -27,7 +27,7 @@ function NewGamePageInner() {
   const router = useRouter();
   const search = useSearchParams();
   const [numPlayers, setNumPlayers] = useState(3);
-  const [themeId, setThemeId] = useState("classic");
+  const [themeId, setThemeId] = useState("hamsa");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   const [board, setBoard] = useState<Board | null>(null);

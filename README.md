@@ -38,6 +38,11 @@ Configuration:
 
 ## Playing online
 
+> **Easiest path for exactly 2 players (works anywhere, free, with iPhone
+> "your turn" push notifications):** see **[README_EASY_ONLINE.md](./README_EASY_ONLINE.md)** —
+> Vercel + Firebase Realtime Database + PWA web push, room code + invite link + QR,
+> no accounts and no game server to run. The lobby lives at **/duo**.
+
 1. One player taps **Create Game**, picks the player count, theme and board,
    and lands in the **Waiting Room** with a game code.
 2. Friends tap **Join Game** and paste the code (works across devices on the

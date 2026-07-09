@@ -17,8 +17,8 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-export function harborTexture(label: string, accent: string, sub?: string): THREE.CanvasTexture {
-  const key = `${label}|${accent}|${sub ?? ""}`;
+export function harborTexture(label: string, accent: string, sub?: string, icon?: string): THREE.CanvasTexture {
+  const key = `${label}|${accent}|${sub ?? ""}|${icon ?? ""}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -28,25 +28,32 @@ export function harborTexture(label: string, accent: string, sub?: string): THRE
   canvas.height = S;
   const ctx = canvas.getContext("2d")!;
 
-  // Plaque
-  roundRect(ctx, 24, 40, S - 48, S - 80, 40);
+  // Plaque — nearly full-bleed so the badge reads from a zoomed-out camera.
+  roundRect(ctx, 10, 10, S - 20, S - 20, 36);
   ctx.fillStyle = "#f4ead2";
   ctx.fill();
-  ctx.lineWidth = 12;
+  ctx.lineWidth = 14;
   ctx.strokeStyle = accent;
   ctx.stroke();
 
-  // Ratio text (nudged up when there's a resource sub-label under it).
-  ctx.fillStyle = "#22303f";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 104px system-ui, sans-serif";
-  ctx.fillText(label, S / 2, sub ? S / 2 - 22 : S / 2 + 4);
 
+  // Resource icon (emoji) on top, big ratio in the middle, name below —
+  // "3:1 ANY" or "2:1 <RESOURCE>" per the trade rules the engine enforces.
+  if (icon) {
+    ctx.font = "72px system-ui, sans-serif";
+    ctx.fillText(icon, S / 2, 66);
+  }
+  ctx.fillStyle = "#22303f";
+  ctx.font = "900 92px system-ui, sans-serif";
+  ctx.fillText(label, S / 2, icon ? 142 : sub ? S / 2 - 24 : S / 2);
   if (sub) {
-    ctx.font = "800 40px system-ui, sans-serif";
+    ctx.font = "900 44px system-ui, sans-serif";
     ctx.fillStyle = accent;
-    ctx.fillText(sub, S / 2, S / 2 + 52);
+    // Fit long themed names ("TERRACOTTA STOP") inside the plaque.
+    const maxWidth = S - 44;
+    ctx.fillText(sub, S / 2, icon ? 204 : S / 2 + 52, maxWidth);
   }
 
   const tex = new THREE.CanvasTexture(canvas);

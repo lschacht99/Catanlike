@@ -172,6 +172,8 @@ export interface GameState {
   difficulties?: Difficulty[];
   /** Human-readable event feed (most recent last). */
   log: string[];
+  /** Duo-online: skip the next turn-begin reset (set when resuming mid-turn). */
+  _duoSkipTurnReset?: boolean;
 }
 
 /** A proposed player-to-player exchange. Amounts only — never hands. */

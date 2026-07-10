@@ -70,17 +70,20 @@ describe("turn lock + optimistic concurrency (2-player sync)", () => {
     expect(validateProposal(room, proposal)).toEqual({ ok: false, reason: "stale-revision" });
   });
 
-  it("lets the HOST publish a bot seat's turn — and nobody else", () => {
+  it("lets only the human holding the bot-turn lock publish a bot seat's turn", () => {
     const players = {
       "0": { name: "Moshe", joined: true, type: "human" },
       "1": { name: "Leah", joined: true, type: "human" },
       "2": { name: "Bot 3", joined: true, type: "bot", botDifficulty: "normal" },
     };
-    const room = makeRoomState("2", 4, players); // bot seat is active
-    expect(validateProposal(room, { seat: "0", baseRevision: 4, snapshot: room.snapshot })).toEqual({ ok: true });
-    expect(validateProposal(room, { seat: "1", baseRevision: 4, snapshot: room.snapshot })).toEqual({
+    const room = {
+      ...makeRoomState("2", 4, players),
+      botTurnLock: { turnId: turnId("", { turn: 7, currentPlayer: "2" }), playerId: "2", claimedBy: "1", claimedAt: 123 },
+    }; // bot seat is active
+    expect(validateProposal(room, { seat: "1", baseRevision: 4, snapshot: room.snapshot })).toEqual({ ok: true });
+    expect(validateProposal(room, { seat: "0", baseRevision: 4, snapshot: room.snapshot })).toEqual({
       ok: false,
-      reason: "not-your-turn",
+      reason: "bot-lock-mismatch",
     });
   });
 
@@ -235,11 +238,11 @@ describe("2–4 player seat configuration", () => {
       "2": { name: "Bot 3", joined: true, type: "bot", botDifficulty: "hard" },
       "3": { name: "Bot 4", joined: true, type: "bot" },
     };
-    expect(devicePlayerSetups(players, "0")).toEqual([
+    expect(devicePlayerSetups(players, "0", "2")).toEqual([
       { mode: "human" },
       { mode: "remote" },
       { mode: "bot", botDifficulty: "hard" },
-      { mode: "bot", botDifficulty: "normal" },
+      { mode: "remote" },
     ]);
     expect(devicePlayerSetups(players, "1")).toEqual([
       { mode: "remote" },

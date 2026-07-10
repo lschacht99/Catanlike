@@ -37,6 +37,7 @@ import {
 import { victoryPoints } from "@/game/scoring";
 import { chooseBotAction } from "@/game/ai/turn";
 import { hasMerchantGuild, maritimeRate, playerHarborTypes } from "@/game/harbors";
+import { canResponderPay as canResponderPayFor, isTradeStale, onlineTradeRole } from "@/game/onlineTrade";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
@@ -48,6 +49,7 @@ import BuildMenu from "./BuildMenu";
 import TradePanel, { type RivalInfo } from "./TradePanel";
 import PrivacyOverlay from "./PrivacyOverlay";
 import { TradeReview, TradeResultBanner } from "./TradeReview";
+import OnlineTradePanel from "./OnlineTradePanel";
 import ProgressCardPlay, { cardNeedsChoice } from "./ProgressCardPlay";
 
 export interface GameBoardPlayProps extends BoardProps<GameState> {
@@ -161,6 +163,28 @@ export default function GameBoardPlay({
 
   const pendingTrade = G.pendingTrade ?? null;
   const tradeResult = G.lastTradeResult ?? null;
+
+  // Duo-online has exactly one human seat per device (handoffGate={false});
+  // local pass-and-play shares one device across every seat, where "which
+  // seat is mine" isn't a meaningful question, so this stays unused there.
+  const onlineMode = !handoffGate;
+  const mySeatId = useMemo(() => {
+    const idx = playerSetups.findIndex((s) => s.mode === "human");
+    return idx >= 0 ? String(idx) : "";
+  }, [playerSetups]);
+  const myTradeRole = onlineMode ? onlineTradeRole(pendingTrade, mySeatId) : "bystander";
+  const tradeStale = onlineMode && !!pendingTrade && isTradeStale(G, pendingTrade);
+
+  // Safe recovery: if the offer's own giver can no longer honor it (or it
+  // somehow references a player that doesn't exist), clear it instead of
+  // leaving either device stuck. Only the two participants may legally
+  // answer (respondTrade enforces this) — whichever device notices first
+  // does it; the CAS on the room's revision makes a duplicate a no-op.
+  useEffect(() => {
+    if (!tradeStale) return;
+    if (myTradeRole !== "proposer" && myTradeRole !== "responder") return;
+    boardMoves.respondTrade?.(false);
+  }, [tradeStale, myTradeRole, boardMoves]);
 
   // Public rival info for the trade panel — counts only, never the breakdown.
   const rivals: RivalInfo[] = Object.keys(G.players)
@@ -458,27 +482,49 @@ export default function GameBoardPlay({
         />
       )}
 
-      {/* Private trade response flow (human target): handoff → review → result. */}
-      {pendingTrade && !tradeReviewed && (
-        <PrivacyOverlay
-          playerName={names[Number(pendingTrade.to)]}
-          color={PLAYER_COLORS[Number(pendingTrade.to)]}
-          title="Trade offer"
-          subtitle={`${names[Number(pendingTrade.from)]} sent you a private offer.`}
-          actionLabel={`I'm ${names[Number(pendingTrade.to)]} — Review offer`}
-          onReady={() => setTradeReviewed(true)}
-        />
-      )}
-      {pendingTrade && tradeReviewed && (
-        <TradeReview
-          offer={pendingTrade}
-          theme={theme}
-          proposerName={names[Number(pendingTrade.from)]}
-          responderName={names[Number(pendingTrade.to)]}
-          canPay={G.players[pendingTrade.to].resources[pendingTrade.receive] >= pendingTrade.receiveAmount}
-          onAccept={() => { boardMoves.respondTrade?.(true); setTradeReviewed(false); }}
-          onRefuse={() => { boardMoves.respondTrade?.(false); setTradeReviewed(false); }}
-        />
+      {/* Trade response flow. Online: a bottom sheet over the still-mounted
+          board, no "pass the device" handoff — each phone is already the
+          right player's own device. Local pass-and-play keeps its original
+          handoff → private review flow, unchanged. */}
+      {onlineMode ? (
+        pendingTrade && (
+          <OnlineTradePanel
+            offer={pendingTrade}
+            theme={theme}
+            role={myTradeRole}
+            proposerName={names[Number(pendingTrade.from)]}
+            responderName={names[Number(pendingTrade.to)]}
+            canResponderPay={canResponderPayFor(G, pendingTrade)}
+            expired={tradeStale}
+            onAccept={() => boardMoves.respondTrade?.(true)}
+            onRefuse={() => boardMoves.respondTrade?.(false)}
+            onCancel={() => boardMoves.cancelTrade?.()}
+          />
+        )
+      ) : (
+        <>
+          {pendingTrade && !tradeReviewed && (
+            <PrivacyOverlay
+              playerName={names[Number(pendingTrade.to)]}
+              color={PLAYER_COLORS[Number(pendingTrade.to)]}
+              title="Trade offer"
+              subtitle={`${names[Number(pendingTrade.from)]} sent you a private offer.`}
+              actionLabel={`I'm ${names[Number(pendingTrade.to)]} — Review offer`}
+              onReady={() => setTradeReviewed(true)}
+            />
+          )}
+          {pendingTrade && tradeReviewed && (
+            <TradeReview
+              offer={pendingTrade}
+              theme={theme}
+              proposerName={names[Number(pendingTrade.from)]}
+              responderName={names[Number(pendingTrade.to)]}
+              canPay={G.players[pendingTrade.to].resources[pendingTrade.receive] >= pendingTrade.receiveAmount}
+              onAccept={() => { boardMoves.respondTrade?.(true); setTradeReviewed(false); }}
+              onRefuse={() => { boardMoves.respondTrade?.(false); setTradeReviewed(false); }}
+            />
+          )}
+        </>
       )}
       {!pendingTrade && tradeResult && (
         <TradeResultBanner

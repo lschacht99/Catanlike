@@ -219,7 +219,34 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
       debug: false,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, seat, onLocalState]);
+  }, [base, seat, botDriverSeat, onLocalState]);
+
+
+  // --- lock-arbitrated online bot driver -----------------------------------
+  useEffect(() => {
+    if (!base || !room) return;
+    const active = base.snapshot.ctx.currentPlayer as DuoSeat;
+    const activeSlot = room.players[active];
+    if (activeSlot?.type !== "bot") {
+      setBotDriverSeat(null);
+      return;
+    }
+    const mySlot = room.players[seat];
+    if (!mySlot?.joined || mySlot.type === "bot") return;
+    const key = `${base.snapshot.ctx.turn}:${active}:${seat}`;
+    if (botClaimRef.current === key || botDriverSeat === active) return;
+    const hostDelay = seat === "0" ? 650 : 1200;
+    const jitter = Math.floor(Math.random() * 550);
+    const timer = window.setTimeout(async () => {
+      botClaimRef.current = key;
+      const won = await claimBotTurn(roomId, active, seat);
+      if (won) {
+        setBotDriverSeat(active);
+        window.setTimeout(() => clearBotTurnLock(roomId, seat).catch(() => {}), 10_000);
+      }
+    }, hostDelay + jitter);
+    return () => window.clearTimeout(timer);
+  }, [base, room, roomId, seat, botDriverSeat]);
 
 
   const BotClient = useMemo(() => {

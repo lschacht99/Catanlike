@@ -16,6 +16,7 @@ import {
   humanSeats,
   isBotSlot,
   isNewerSnapshot,
+  rollId,
   roomSeats,
   seatName,
   serializeSnapshot,
@@ -95,6 +96,11 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const lastCtxRef = useRef<DuoSnapshot["ctx"] | null>(null);
   const publishChain = useRef<Promise<void>>(Promise.resolve());
   const lastBannerTurn = useRef("");
+  // Which roll id has already been handed to a mounted board to animate.
+  // Lives here (DuoGame never unmounts across syncs) so a roll that's still
+  // on the board after a LATER unrelated action — which remounts the whole
+  // board below — is recognized as "already shown" instead of replaying.
+  const lastAnimatedRollRef = useRef("");
 
   // --- live room subscription + presence -----------------------------------
   useEffect(() => {
@@ -142,6 +148,19 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   useEffect(() => {
     if (base) lastBannerTurn.current = `${base.snapshot.ctx.turn}:${base.snapshot.ctx.currentPlayer}`;
   }, [base]);
+
+  // --- dice animation: identify a genuinely new roll, once -------------------
+  // The board below remounts on every synced action (see DuoClient), so a
+  // roll that's simply still on the board after some OTHER action (a build,
+  // a bot's move) must not replay its animation. currentRollId is derived
+  // straight from the synced snapshot; diceAnimKey is only ever non-empty on
+  // the one render where that id is new, so a freshly (re)mounted board only
+  // animates when it was actually born showing a roll nobody has seen yet.
+  const currentRollId = base ? rollId(base.snapshot.ctx.turn, base.snapshot.G.lastRoll) : "";
+  const diceAnimKey = currentRollId && currentRollId !== lastAnimatedRollRef.current ? currentRollId : "";
+  useEffect(() => {
+    if (currentRollId) lastAnimatedRollRef.current = currentRollId;
+  }, [currentRollId]);
 
   // Turn passed to a waiting human → maybe send ONE push (deduped, never to
   // a bot seat). Shared by the human publish path and the bot runner.
@@ -235,7 +254,12 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         playerId: snapCtx.currentPlayer,
         claimedBy: seat,
       });
-      if (!claimed || cancelled) return;
+      if (!claimed) {
+        console.debug("[DuoGame] bot lock guard: another device already claimed", tid);
+        return;
+      }
+      if (cancelled) return;
+      console.debug("[DuoGame] bot lock claimed — running the bot's turn headlessly, no confirmation UI", tid);
       botAttempt.current = tid;
       setStatus("syncing");
       try {
@@ -246,9 +270,12 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         });
         if (!result || cancelled) return;
         const wire = serializeSnapshot(result.G, result.ctx, canonicalPlayerSetups(roomRef.current?.players ?? {}));
+        // ONE atomic write for the whole finished bot turn (revision CAS) —
+        // never a separate write per intermediate bot move.
         const pub = await publishSnapshot({ roomId, seat, baseRevision: revisionAtStart, snapshot: wire });
         if (cancelled) return;
         if (pub.ok) {
+          console.debug("[DuoGame] bot turn committed atomically", { turnId: tid, revision: pub.revision });
           appliedRevision.current = pub.revision;
           lastCtxRef.current = wire.ctx;
           setBase({ snapshot: reviveSnapshot(wire), revision: pub.revision });
@@ -289,7 +316,15 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
     const botSeats = roomSeats(roomRef.current?.players ?? {}).filter((s) => isBotSlot(roomRef.current?.players?.[s]));
     const startPhase = ctx.phase === "setup" ? ("setup" as const) : ("play" as const);
     const Board = (props: BoardProps<GameState>) => (
-      <DuoBoard {...props} onLocalState={onLocalState} theme={theme} playerModes={playerModes} variant={G.variant ?? "base"} remoteBotSeats={botSeats} />
+      <DuoBoard
+        {...props}
+        onLocalState={onLocalState}
+        theme={theme}
+        playerModes={playerModes}
+        variant={G.variant ?? "base"}
+        remoteBotSeats={botSeats}
+        diceAnimKey={diceAnimKey}
+      />
     );
     return Client<GameState>({
       game: createDuoGame(localG, startPhase, ctx.playOrderPos ?? Number(ctx.currentPlayer)),
@@ -401,7 +436,13 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         </div>
       )}
 
-      <div className="pt-7">{DuoClient ? <DuoClient key={`${base?.revision ?? 0}:${seat}`} playerID={seat} /> : null}</div>
+      {/* Stable key: NOT tied to revision/turn/snapshot. The underlying
+          Client still gets recreated when base changes (boardgame.io has no
+          supported way to push external state into an already-mounted local
+          client without a multiplayer transport) — see the comment on
+          DuoClient above — but keying by seat instead of revision at least
+          avoids compounding that with an unrelated, redundant remount. */}
+      <div className="pt-7">{DuoClient ? <DuoClient key={seat} playerID={seat} /> : null}</div>
       {activeIsBot && (
         <div className="pointer-events-none fixed inset-x-4 bottom-24 z-[65] rounded-2xl border border-yellow-300/30 bg-slate-950/90 p-3 text-center text-sm font-bold text-yellow-100 shadow-2xl">
           Bot is thinking…
@@ -423,6 +464,7 @@ function DuoBoard(
     playerModes: ("human" | "remote" | "bot")[];
     variant: "base" | "cities-knights";
     remoteBotSeats: string[];
+    diceAnimKey: string;
   },
 ) {
   const { onLocalState, G, ctx } = props;
@@ -442,6 +484,7 @@ function DuoBoard(
       playerModes={props.playerModes}
       variant={props.variant}
       remoteBotSeats={props.remoteBotSeats}
+      diceAnimKey={props.diceAnimKey}
       handoffGate={false}
     />
   );

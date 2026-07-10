@@ -295,7 +295,19 @@ export default function HexBoard3D({
   onTileTap,
   className = "",
 }: HexBoard3DProps) {
-  const geo = useMemo(() => buildGeometry(board.tiles), [board.tiles]);
+  // The board's CONTENT never changes mid-game, but duo-online snapshots
+  // arrive as a fresh object every time (JSON round-trip through Firebase),
+  // so memoizing by object/array reference misses every single sync tick —
+  // recomputing hex geometry and harbor placement on every action. A cheap
+  // content-derived key (tile id/resource/token — the "board seed" in
+  // spirit, since Board carries no explicit seed field) makes these real
+  // cache hits across snapshots and across remounts of this component.
+  const boardKey = board.tiles.map((t) => `${t.id}:${t.resource}:${t.token ?? ""}`).join("|");
+  const geo = useMemo(() => {
+    console.debug("[HexBoard3D] geometry recomputed (new board content)", boardKey.slice(0, 24));
+    return buildGeometry(board.tiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardKey]);
   const treeAsset = useTreeAsset();
 
   // Distinct tile-art URLs this theme actually needs (a color-only theme
@@ -359,7 +371,8 @@ export default function HexBoard3D({
         tip: `2:1 ${name} harbor — a settlement or city here trades 2 ${name} for 1 card of your choice. This rate is for ${name} only (never commodities or other resources).`,
       };
     });
-  }, [board, world, theme]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardKey, world, theme]);
   const [harborTip, setHarborTip] = useState<string | null>(null);
 
   // Height of each vertex = tallest tile it touches, so pieces sit on the land.

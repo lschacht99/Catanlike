@@ -249,6 +249,17 @@ export function turnId(roomId: string, ctx: Pick<Ctx | DuoCtxSnapshot, "turn" | 
 }
 
 /**
+ * Stable id for "this specific dice roll" — the board remounts on every
+ * synced action in duo online, so a roll that's simply still on the board
+ * after some OTHER action (a build, a bot's move) must be recognized as
+ * already-shown rather than replaying its animation. "" means no roll to
+ * animate (turn hasn't rolled yet, or the roll was cleared at turn end).
+ */
+export function rollId(turn: number, lastRoll: readonly [number, number] | null | undefined): string {
+  return lastRoll ? `${turn}:${lastRoll[0]}-${lastRoll[1]}` : "";
+}
+
+/**
  * Push policy: notify ONLY the waiting player, ONLY when the active player
  * actually changed, never twice for the same turn id, and never for a bot
  * seat (its "phone" is the host, which is already driving it). Publishing

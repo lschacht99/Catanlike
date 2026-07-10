@@ -38,6 +38,21 @@ export default function HomePage() {
         <div className="mt-4 grid gap-3">
           {hasSave && <Link onClick={resume} href="/game" className="rounded-2xl bg-ink px-4 py-4 text-center font-black uppercase tracking-[0.12em] text-cream">Resume Game</Link>}
           <PrimaryLink href="/new">Quick New Game</PrimaryLink>
+          <Link href="/duo" className="rounded-2xl border border-rust/50 bg-cream p-4 shadow-card active:scale-[0.99]">
+            <span className="flex items-start gap-3">
+              <span className="text-2xl" aria-hidden>🌍</span>
+              <span className="flex-1">
+                <b className="block text-sm text-ink">Play together from anywhere</b>
+                <small className="mt-1 block text-xs leading-5 text-ink-soft">
+                  Create a private room for 2–4 players. Play with your wife, friends, or mix
+                  humans + bots. Works on different Wi-Fi or cellular.
+                </small>
+              </span>
+            </span>
+            <span className="mt-3 block rounded-full bg-rust py-2.5 text-center text-sm font-black uppercase tracking-[0.12em] text-cream">
+              Play Online
+            </span>
+          </Link>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {cards.map((c) => <Link key={c.title} href={c.href} className="grid grid-cols-[88px_1fr] gap-3 rounded-2xl border border-line bg-cream p-2 shadow-card"><img src={asset(c.img)} onError={fallback} alt="" className="aspect-square rounded-xl bg-parchment object-cover" loading="lazy" /><span><b className="block text-sm text-ink">{c.title}</b><small className="mt-1 block text-xs leading-5 text-ink-soft">{c.text}</small></span></Link>)}
           </div>

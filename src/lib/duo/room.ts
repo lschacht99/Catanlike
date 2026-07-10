@@ -1,25 +1,34 @@
 "use client";
 
-import { get, onValue, ref, runTransaction, set, update, onDisconnect } from "firebase/database";
+import { get, onValue, ref, runTransaction, set, onDisconnect } from "firebase/database";
 import type { Board, GameVariant } from "@/types/game";
 import { initialState } from "@/game/game";
 import { devDeck } from "@/game/constants";
 import { duoDatabase } from "./firebase";
 import {
+  canonicalPlayerSetups,
   generateRoomCode,
+  nextFreeHumanSeat,
+  sanitizeSeatConfigs,
+  stripUndefinedDeep,
   validateProposal,
+  type DuoPlayers,
   type DuoRoom,
   type DuoSeat,
+  type DuoSeatConfig,
   type DuoSnapshot,
   type ProposalRejection,
 } from "./protocol";
 
 /**
- * All Realtime Database access for a duo room lives here. Reads/writes are
+ * All Realtime Database access for a room lives here. Reads/writes are
  * plain JSON under /rooms/{roomId}; concurrency is handled with
  * runTransaction (compare-and-swap on `revision`), and the turn lock is
  * re-checked INSIDE the transaction so a stale or out-of-turn phone can
  * never clobber state, whatever its local UI believed.
+ *
+ * Every payload passes through stripUndefinedDeep — RTDB throws on any
+ * `undefined` value anywhere in a write.
  */
 
 const roomPath = (roomId: string) => `rooms/${roomId}`;
@@ -36,30 +45,42 @@ function shuffle<T>(items: T[]): T[] {
 export async function createRoom(args: {
   board: Board;
   variant: GameVariant;
-  hostName: string;
-  guestName: string;
+  /** Seat 0 is the creator (always human); 2–4 entries. */
+  seats: Array<Partial<DuoSeatConfig>>;
   pin?: string;
 }): Promise<{ roomId: string }> {
   const db = duoDatabase();
+  const seats = sanitizeSeatConfigs(args.seats);
   // Retry on the (rare) collision with an existing live room code.
   for (let attempt = 0; attempt < 8; attempt++) {
     const roomId = generateRoomCode();
     const node = ref(db, roomPath(roomId));
     const existing = await get(node);
     if (existing.exists()) continue;
-    const names = [args.hostName || "Player 1", args.guestName || "Player 2"];
-    const G = initialState(args.board, 2, shuffle(devDeck()), names, args.variant, [
-      { mode: "human" },
-      { mode: "human" },
-    ]);
+    const players: DuoPlayers = {};
+    seats.forEach((seat, i) => {
+      players[String(i) as DuoSeat] = {
+        name: seat.name,
+        // The creator sits down immediately; bots never need to join.
+        joined: i === 0 || seat.type === "bot",
+        type: seat.type,
+        ...(seat.type === "bot" ? { botDifficulty: seat.botDifficulty ?? "normal" } : {}),
+        pushSubscription: null,
+      };
+    });
+    const G = initialState(
+      args.board,
+      seats.length,
+      shuffle(devDeck()),
+      seats.map((s) => s.name),
+      args.variant,
+      canonicalPlayerSetups(players),
+    );
     const room: DuoRoom = {
       createdAt: Date.now(),
       variant: args.variant,
       pin: args.pin ?? "",
-      players: {
-        "0": { name: names[0], joined: true, pushSubscription: null },
-        "1": { name: names[1], joined: false, pushSubscription: null },
-      },
+      players,
       revision: 0,
       snapshot: {
         G,
@@ -68,30 +89,60 @@ export async function createRoom(args: {
       lastNotifiedTurnId: "",
       presence: {},
     };
-    await set(node, room);
+    await set(node, stripUndefinedDeep(room));
     return { roomId };
   }
   throw new Error("Could not allocate a room code — try again.");
 }
 
 export type JoinResult =
-  | { ok: true; room: DuoRoom }
-  | { ok: false; reason: "not-found" | "wrong-pin" };
+  | { ok: true; seat: DuoSeat; room: DuoRoom }
+  | { ok: false; reason: "not-found" | "wrong-pin" | "room-full" };
 
+/**
+ * Claim the next free HUMAN seat. Runs as a transaction so two guests
+ * joining a 3–4 player room at the same moment get different seats.
+ */
 export async function joinRoom(roomId: string, pin: string, guestName?: string): Promise<JoinResult> {
   const db = duoDatabase();
   const snap = await get(ref(db, roomPath(roomId)));
   if (!snap.exists()) return { ok: false, reason: "not-found" };
-  const room = snap.val() as DuoRoom;
-  if ((room.pin ?? "") !== (pin ?? "")) return { ok: false, reason: "wrong-pin" };
-  const updates: Record<string, unknown> = { [`${roomPath(roomId)}/players/1/joined`]: true };
-  if (guestName) {
-    updates[`${roomPath(roomId)}/players/1/name`] = guestName;
-    updates[`${roomPath(roomId)}/snapshot/G/names/1`] = guestName;
-    updates[`${roomPath(roomId)}/snapshot/G/playerNames/1`] = guestName;
+  const existing = snap.val() as DuoRoom;
+  if ((existing.pin ?? "") !== (pin ?? "")) return { ok: false, reason: "wrong-pin" };
+
+  let claimedSeat: DuoSeat | null = null;
+  let rejection: "wrong-pin" | "room-full" | null = null;
+  const result = await runTransaction(ref(db, roomPath(roomId)), (room: DuoRoom | null) => {
+    if (!room) return room; // local cache miss / room vanished
+    claimedSeat = null;
+    rejection = null;
+    if ((room.pin ?? "") !== (pin ?? "")) {
+      rejection = "wrong-pin";
+      return undefined; // abort
+    }
+    const seat = nextFreeHumanSeat(room.players ?? {});
+    if (!seat) {
+      rejection = "room-full";
+      return undefined; // abort
+    }
+    claimedSeat = seat;
+    const name = guestName?.trim() || room.players[seat]?.name || `Player ${Number(seat) + 1}`;
+    const players: DuoPlayers = { ...room.players, [seat]: { ...room.players[seat], name, joined: true } };
+    const names = [...(room.snapshot?.G?.names ?? [])];
+    const playerNames = [...(room.snapshot?.G?.playerNames ?? names)];
+    names[Number(seat)] = name;
+    playerNames[Number(seat)] = name;
+    return stripUndefinedDeep({
+      ...room,
+      players,
+      snapshot: { ...room.snapshot, G: { ...room.snapshot.G, names, playerNames } },
+    });
+  });
+  if (rejection) return { ok: false, reason: rejection };
+  if (!result.committed || !claimedSeat || !result.snapshot.exists()) {
+    return { ok: false, reason: "not-found" };
   }
-  await update(ref(db), updates);
-  return { ok: true, room };
+  return { ok: true, seat: claimedSeat, room: result.snapshot.val() as DuoRoom };
 }
 
 export async function fetchRoom(roomId: string): Promise<DuoRoom | null> {
@@ -130,7 +181,7 @@ export async function publishSnapshot(args: {
       return undefined; // abort the transaction
     }
     committedRevision = room.revision + 1;
-    return { ...room, revision: committedRevision, snapshot: args.snapshot };
+    return stripUndefinedDeep({ ...room, revision: committedRevision, snapshot: args.snapshot });
   });
   if (rejection) return { ok: false, reason: rejection };
   if (!result.committed) return { ok: false, reason: "aborted" };
@@ -154,7 +205,7 @@ export async function claimTurnNotification(roomId: string, turnIdValue: string)
 /** Store (or clear, with null) a player's push subscription in the room. */
 export async function savePushSubscription(roomId: string, seat: DuoSeat, subscriptionJson: string | null): Promise<void> {
   const db = duoDatabase();
-  await set(ref(db, `${roomPath(roomId)}/players/${seat}/pushSubscription`), subscriptionJson);
+  await set(ref(db, `${roomPath(roomId)}/players/${seat}/pushSubscription`), subscriptionJson ?? null);
 }
 
 /** Heartbeat presence: repeated timestamps + best-effort clear on disconnect. */

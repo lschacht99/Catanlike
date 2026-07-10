@@ -9,8 +9,10 @@ import { createDuoGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import GameBoardPlay from "./GameBoardPlay";
 import {
+  canonicalPlayerSetups,
+  devicePlayerSetups,
+  humanSeats,
   isNewerSnapshot,
-  otherSeat,
   seatName,
   serializeSnapshot,
   reviveSnapshot,
@@ -61,11 +63,13 @@ function playTurnChime(): void {
 }
 
 /**
- * The Firebase-synced 2-phone game. Each phone runs a local boardgame.io
- * client rebuilt from the latest shared snapshot; a move made HERE is
- * published with a revision compare-and-swap (rejected if out of turn or
- * stale), and a snapshot arriving from the OTHER phone remounts the local
- * client. Refresh/reconnect just re-reads the latest snapshot.
+ * The Firebase-synced online game (2–4 seats, humans and bots). Each phone
+ * runs a local boardgame.io client rebuilt from the latest shared snapshot;
+ * a move made HERE is published with a revision compare-and-swap (rejected
+ * if out of turn or stale), and a snapshot arriving from ANOTHER phone
+ * remounts the local client. Bot seats are driven by the HOST device only
+ * (everyone else sees them as remote players). Refresh/reconnect just
+ * re-reads the latest snapshot.
  */
 export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const theme = getTheme("hamsa");
@@ -112,7 +116,6 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
 
   // --- in-app fallback: banner + vibration + chime when it becomes my turn --
   const myName = room ? seatName(room, seat) : "You";
-  const opponentName = room ? seatName(room, otherSeat(seat)) : "Opponent";
   useEffect(() => {
     if (!base) return;
     const { ctx } = base.snapshot;
@@ -135,7 +138,8 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
     (G: GameState, ctx: BoardProps<GameState>["ctx"]) => {
       publishChain.current = publishChain.current.then(async () => {
         const previous = lastCtxRef.current;
-        const snapshot = serializeSnapshot(G, ctx);
+        const players = roomRef.current?.players ?? {};
+        const snapshot = serializeSnapshot(G, ctx, canonicalPlayerSetups(players));
         setStatus("syncing");
         const result = await publishSnapshot({
           roomId,
@@ -154,6 +158,7 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
             previousActivePlayer: previous?.currentPlayer ?? seat,
             nextCtx: snapshot.ctx,
             lastNotifiedTurnId: currentRoom?.lastNotifiedTurnId,
+            players: currentRoom?.players,
           });
           if (decision.notify && currentRoom) {
             const claimed = await claimTurnNotification(roomId, decision.turnId);
@@ -189,12 +194,15 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const DuoClient = useMemo(() => {
     if (!base) return null;
     const { G, ctx } = base.snapshot;
-    // This device drives ONLY its own seat; the other seat renders as remote.
+    // This device drives ONLY its own seat (plus the bots, if it's the host);
+    // every other seat renders as remote. Seat types never change after the
+    // room is created, so reading them from the ref is safe here.
+    const setups = devicePlayerSetups(roomRef.current?.players ?? {}, seat);
     const localG: GameState = {
       ...G,
-      playerSetups: (["0", "1"] as const).map((s) => ({ mode: s === seat ? ("human" as const) : ("remote" as const) })),
+      playerSetups: setups.length === G.numPlayers ? setups : G.playerSetups,
     };
-    const playerModes = localG.playerSetups!.map((s) => s.mode);
+    const playerModes = (localG.playerSetups ?? []).map((s) => s.mode);
     const startPhase = ctx.phase === "setup" ? ("setup" as const) : ("play" as const);
     const Board = (props: BoardProps<GameState>) => (
       <DuoBoard {...props} onLocalState={onLocalState} theme={theme} playerModes={playerModes} variant={G.variant ?? "base"} />
@@ -202,7 +210,7 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
     return Client<GameState>({
       game: createDuoGame(localG, startPhase, ctx.playOrderPos ?? Number(ctx.currentPlayer)),
       board: Board,
-      numPlayers: 2,
+      numPlayers: G.numPlayers,
       debug: false,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,10 +253,24 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
     );
   }
 
-  const opponentJoined = room.players[otherSeat(seat)]?.joined;
-  const opponentOnline = isPresent(room.presence?.[otherSeat(seat)]);
+  // Other HUMAN seats: who still has to join, who's online right now.
+  const otherHumans = humanSeats(room.players).filter((s) => s !== seat);
+  const pendingHumans = otherHumans.filter((s) => !room.players[s]?.joined);
+  const onlineHumans = otherHumans.filter((s) => room.players[s]?.joined && isPresent(room.presence?.[s]));
+  const opponentStatus =
+    otherHumans.length === 0
+      ? "You vs bots"
+      : pendingHumans.length > 0
+        ? `Waiting for ${pendingHumans.map((s) => seatName(room, s)).join(", ")}…`
+        : otherHumans.length === 1
+          ? isPresent(room.presence?.[otherHumans[0]])
+            ? `${seatName(room, otherHumans[0])} online`
+            : `${seatName(room, otherHumans[0])} away`
+          : `${onlineHumans.length}/${otherHumans.length} opponents online`;
   const active = base?.snapshot.ctx.currentPlayer;
-  const whoseTurn = active === seat ? "Your turn" : `${opponentName}’s turn`;
+  const activeIsBot = active !== undefined && room.players[active as DuoSeat]?.type === "bot";
+  const whoseTurn =
+    active === seat ? "Your turn" : `${active ? seatName(room, active as DuoSeat) : "…"}’s turn${activeIsBot ? " 🤖" : ""}`;
   const lastMove = base?.snapshot.G.log?.[base.snapshot.G.log.length - 1] ?? "";
 
   return (
@@ -258,7 +280,7 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         <span className={`h-2 w-2 shrink-0 rounded-full ${status === "online" ? "bg-emerald-400" : status === "syncing" ? "bg-yellow-400" : "bg-red-400"}`} />
         <span className="font-bold uppercase tracking-wide">{status}</span>
         <span className="text-slate-500">·</span>
-        <span>{opponentJoined ? (opponentOnline ? `${opponentName} online` : `${opponentName} away`) : "Waiting for opponent…"}</span>
+        <span className="truncate">{opponentStatus}</span>
         <span className="text-slate-500">·</span>
         <span className="font-bold text-yellow-300">{whoseTurn}</span>
         {lastMove && <span className="ml-auto hidden truncate text-slate-400 sm:block">{lastMove}</span>}
@@ -286,11 +308,12 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         </div>
       )}
 
-      {/* Waiting room until the opponent joins. */}
-      {!opponentJoined && (
+      {/* Waiting room until every human seat is claimed (bots never wait). */}
+      {pendingHumans.length > 0 && (
         <div className="fixed inset-x-0 bottom-24 z-[60] mx-4 rounded-2xl border border-white/15 bg-slate-900/95 p-3 text-center text-xs text-slate-200">
           Share room code <b className="tracking-[0.3em] text-yellow-300">{roomId}</b>
-          {room.pin ? <> (PIN <b>{room.pin}</b>)</> : null} — waiting for {opponentName} to join.
+          {room.pin ? <> (PIN <b>{room.pin}</b>)</> : null} — waiting for{" "}
+          {pendingHumans.map((s) => seatName(room, s)).join(", ")} to join.
         </div>
       )}
 

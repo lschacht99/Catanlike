@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import Link from "next/link";
 import { Client } from "boardgame.io/react";
 import type { BoardProps } from "boardgame.io/react";
@@ -8,6 +8,7 @@ import type { GameState } from "@/types/game";
 import { createDuoGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import GameBoardPlay from "./GameBoardPlay";
+import { runBotTurn } from "@/game/bot-engine";
 import {
   canonicalPlayerSetups,
   devicePlayerSetups,
@@ -23,7 +24,9 @@ import {
   type DuoSnapshot,
 } from "@/lib/duo/protocol";
 import {
+  claimBotTurn,
   claimTurnNotification,
+  clearBotTurnLock,
   fetchRoom,
   isPresent,
   publishSnapshot,
@@ -67,8 +70,8 @@ function playTurnChime(): void {
  * runs a local boardgame.io client rebuilt from the latest shared snapshot;
  * a move made HERE is published with a revision compare-and-swap (rejected
  * if out of turn or stale), and a snapshot arriving from ANOTHER phone
- * remounts the local client. Bot seats are driven by the HOST device only
- * (everyone else sees them as remote players). Refresh/reconnect just
+ * remounts the local client. Bot seats are driven by the connected human browser that wins the RTDB
+ * bot-turn lock (host tries first; another human can fall back). Refresh/reconnect just
  * re-reads the latest snapshot.
  */
 export default function DuoGame({ roomId, seat }: DuoGameProps) {
@@ -79,12 +82,15 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const [banner, setBanner] = useState<string | null>(null);
   const [pushState, setPushState] = useState<"off" | "on" | "busy">("off");
   const [pushError, setPushError] = useState<string | null>(null);
+  const [botDriverSeat, setBotDriverSeat] = useState<DuoSeat | null>(null);
 
   const appliedRevision = useRef(-1);
   const roomRef = useRef<DuoRoom | null>(null);
   const lastCtxRef = useRef<DuoSnapshot["ctx"] | null>(null);
   const publishChain = useRef<Promise<void>>(Promise.resolve());
   const lastBannerTurn = useRef("");
+  const botClaimRef = useRef("");
+  const botTradeTurnRef = useRef("");
 
   // --- live room subscription + presence -----------------------------------
   useEffect(() => {
@@ -194,9 +200,8 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const DuoClient = useMemo(() => {
     if (!base) return null;
     const { G, ctx } = base.snapshot;
-    // This device drives ONLY its own seat (plus the bots, if it's the host);
-    // every other seat renders as remote. Seat types never change after the
-    // room is created, so reading them from the ref is safe here.
+    // The visible board always stays mounted as this human seat. Bot seats are
+    // rendered remote here; a separate hidden client dispatches bot moves.
     const setups = devicePlayerSetups(roomRef.current?.players ?? {}, seat);
     const localG: GameState = {
       ...G,
@@ -215,6 +220,67 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, seat, onLocalState]);
+
+
+  const BotClient = useMemo(() => {
+    if (!base || !botDriverSeat) return null;
+    const { G, ctx } = base.snapshot;
+    if (ctx.currentPlayer !== botDriverSeat) return null;
+    const setups = devicePlayerSetups(roomRef.current?.players ?? {}, seat, botDriverSeat);
+    const localG: GameState = {
+      ...G,
+      playerSetups: setups.length === G.numPlayers ? setups : G.playerSetups,
+    };
+    const startPhase = ctx.phase === "setup" ? ("setup" as const) : ("play" as const);
+    const Board = (props: BoardProps<GameState>) => (
+      <DuoBotBoard
+        {...props}
+        onLocalState={onLocalState}
+        botSeat={botDriverSeat}
+        claimSeat={seat}
+        roomId={roomId}
+        tradeTurnRef={botTradeTurnRef}
+        onGiveUp={() => setBotDriverSeat((current) => (current === botDriverSeat ? null : current))}
+      />
+    );
+    return Client<GameState>({
+      game: createDuoGame(localG, startPhase, ctx.playOrderPos ?? Number(ctx.currentPlayer)),
+      board: Board,
+      numPlayers: G.numPlayers,
+      debug: false,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, botDriverSeat, onLocalState, roomId, seat]);
+
+  // --- lock-arbitrated online bot driver -----------------------------------
+  useEffect(() => {
+    if (!base || !room) return;
+    const active = base.snapshot.ctx.currentPlayer as DuoSeat;
+    const activeSlot = room.players[active];
+    if (activeSlot?.type !== "bot") {
+      if (botDriverSeat) clearBotTurnLock(roomId, seat).catch(() => {});
+      setBotDriverSeat(null);
+      return;
+    }
+    const mySlot = room.players[seat];
+    if (!mySlot?.joined || mySlot.type === "bot") return;
+    const key = `${base.snapshot.ctx.turn}:${active}:${seat}`;
+    if (botClaimRef.current === key || botDriverSeat === active) return;
+    const hostDelay = seat === "0" ? 650 : 1200;
+    const jitter = Math.floor(Math.random() * 550);
+    const timer = window.setTimeout(async () => {
+      botClaimRef.current = key;
+      const won = await claimBotTurn(roomId, active, seat);
+      if (won) {
+        setBotDriverSeat(active);
+        window.setTimeout(() => {
+          clearBotTurnLock(roomId, seat).catch(() => {});
+          setBotDriverSeat((current) => (current === active ? null : current));
+        }, 10_000);
+      }
+    }, hostDelay + jitter);
+    return () => window.clearTimeout(timer);
+  }, [base, room, roomId, seat, botDriverSeat]);
 
   // --- notifications toggle --------------------------------------------------
   async function togglePush() {
@@ -317,9 +383,66 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         </div>
       )}
 
-      <div className="pt-7">{DuoClient ? <DuoClient playerID={seat} /> : null}</div>
+      <div className="pt-7">{DuoClient ? <DuoClient key={`${base?.revision ?? 0}:${seat}`} playerID={seat} /> : null}</div>
+      {BotClient && botDriverSeat ? <BotClient key={`bot:${base?.revision ?? 0}:${botDriverSeat}`} playerID={botDriverSeat} /> : null}
+      {activeIsBot && (
+        <div className="pointer-events-none fixed inset-x-4 bottom-24 z-[65] rounded-2xl border border-yellow-300/30 bg-slate-950/90 p-3 text-center text-sm font-bold text-yellow-100 shadow-2xl">
+          Bot is thinking…
+        </div>
+      )}
     </div>
   );
+}
+
+
+function DuoBotBoard(
+  props: BoardProps<GameState> & {
+    onLocalState: (G: GameState, ctx: BoardProps<GameState>["ctx"]) => void;
+    botSeat: DuoSeat;
+    claimSeat: DuoSeat;
+    roomId: string;
+    tradeTurnRef: MutableRefObject<string>;
+    onGiveUp: () => void;
+  },
+) {
+  const { G, ctx, moves, onLocalState, botSeat, claimSeat, roomId, tradeTurnRef, onGiveUp } = props;
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    onLocalState(G, ctx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [G, ctx]);
+
+  useEffect(() => {
+    if (ctx.currentPlayer !== botSeat || ctx.gameover) return;
+    if (G.pendingTrade) return;
+    const delay = 600 + Math.floor(Math.random() * 600);
+    const timer = window.setTimeout(() => {
+      const tradeKey = `${roomId}:${ctx.turn}:${botSeat}`;
+      const allowTradeProposal = ctx.phase !== "setup" && tradeTurnRef.current !== tradeKey;
+      if (allowTradeProposal) tradeTurnRef.current = tradeKey;
+      runBotTurn(moves as unknown as Record<string, (...args: unknown[]) => unknown>, G, botSeat, {
+        variant: G.variant ?? "base",
+        allowTradeProposal,
+        rng: Math.random,
+        difficulty: G.playerSetups?.[Number(botSeat)]?.botDifficulty ?? "normal",
+      });
+    }, delay);
+    const force = window.setTimeout(() => {
+      clearBotTurnLock(roomId, claimSeat).catch(() => {});
+      onGiveUp();
+    }, 10_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(force);
+    };
+  }, [G, ctx, moves, botSeat, claimSeat, roomId, tradeTurnRef, onGiveUp]);
+
+  return null;
 }
 
 /**

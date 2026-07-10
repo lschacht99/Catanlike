@@ -5,6 +5,7 @@ import { makeState } from "./helpers";
 import {
   proposeTrade,
   respondTrade,
+  cancelTrade,
   buildKnight,
   upgradeKnight,
   activateKnight,
@@ -72,6 +73,45 @@ describe("player trade offers", () => {
     run(proposeTrade, ctx(G, "0") as any, "1", "ore", 2, "wood", 1);
     expect(G.pendingTrade).toBeNull();
     expect(G.lastTradeResult?.respondedByBot).toBe(true);
+  });
+
+  it("the proposer can cancel their own outstanding offer, clearing it untouched", () => {
+    const G = makeState(2, { playerModes: ["human", "human"] });
+    G.players["0"].resources.wood = 2;
+    run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    expect(G.pendingTrade).not.toBeNull();
+    run(cancelTrade, ctx(G, "0") as any);
+    expect(G.pendingTrade).toBeNull();
+    expect(G.players["0"].resources.wood).toBe(2); // untouched
+  });
+
+  it("only the proposer may cancel — the responder cannot", () => {
+    const G = makeState(2, { playerModes: ["human", "human"] });
+    G.players["0"].resources.wood = 2;
+    run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    const r = run(cancelTrade, ctx(G, "1") as any);
+    expect(r).toBe(INVALID_MOVE);
+    expect(G.pendingTrade).not.toBeNull();
+  });
+
+  it("cancelling with nothing pending is rejected", () => {
+    const G = makeState(2, { playerModes: ["human", "human"] });
+    const r = run(cancelTrade, ctx(G, "0") as any);
+    expect(r).toBe(INVALID_MOVE);
+  });
+
+  it("accepting a since-gone-stale offer voids it instead of transferring resources (safe recovery)", () => {
+    const G = makeState(2, { playerModes: ["human", "human"] });
+    G.players["0"].resources.wood = 2;
+    G.players["1"].resources.ore = 2;
+    run(proposeTrade, ctx(G, "0") as any, "1", "wood", 1, "ore", 1);
+    // The proposer's wood is spent on something else before the responder answers.
+    G.players["0"].resources.wood = 0;
+    run(respondTrade, ctx(G, "1") as any, true);
+    expect(G.pendingTrade).toBeNull(); // never left dangling
+    expect(G.lastTradeResult?.accepted).toBe(false);
+    expect(G.lastTradeResult?.reason).toMatch(/void/i);
+    expect(G.players["1"].resources.ore).toBe(2); // no partial transfer
   });
 });
 

@@ -86,7 +86,7 @@ describe("turn lock + optimistic concurrency (2-player sync)", () => {
     const room2 = makeRoomState("2", 4, withTwoBots);
     expect(validateProposal(room2, { seat: "3", baseRevision: 4, snapshot: room2.snapshot })).toEqual({
       ok: false,
-      reason: "bot-lock-mismatch",
+      reason: "not-your-turn",
     });
   });
 

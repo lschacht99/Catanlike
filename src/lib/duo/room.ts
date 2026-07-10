@@ -12,7 +12,6 @@ import {
   nextFreeHumanSeat,
   sanitizeSeatConfigs,
   stripUndefinedDeep,
-  turnId,
   validateProposal,
   type BotTurnLock,
   type DuoPlayers,
@@ -256,36 +255,4 @@ export function startPresence(roomId: string, seat: DuoSeat): () => void {
 
 export function isPresent(timestamp: number | undefined): boolean {
   return !!timestamp && Date.now() - timestamp < 45_000;
-}
-
-
-/** Atomically claim the active bot turn. Host wins preference by trying first; any human can fall back. */
-export async function claimBotTurn(roomId: string, botPlayerId: DuoSeat, claimedBy: DuoSeat, staleMs = 10_000): Promise<boolean> {
-  const db = duoDatabase();
-  const now = Date.now();
-  const idFor = (ctx: { turn: number; currentPlayer: string }) => turnId("", ctx);
-  const result = await runTransaction(ref(db, roomPath(roomId)), (room: DuoRoom | null) => {
-    if (!room) return room;
-    if (room.snapshot?.ctx?.currentPlayer !== botPlayerId) return undefined;
-    if (room.players?.[botPlayerId]?.type !== "bot") return undefined;
-    if (room.players?.[claimedBy]?.type === "bot" || !room.players?.[claimedBy]?.joined) return undefined;
-    const nextTurnId = idFor(room.snapshot.ctx);
-    const lock = room.botTurnLock;
-    const reusable = !lock || lock.turnId !== nextTurnId || lock.playerId !== botPlayerId || now - (lock.claimedAt ?? 0) > staleMs;
-    if (!reusable && lock.claimedBy !== claimedBy) return undefined;
-    return stripUndefinedDeep({
-      ...room,
-      botTurnLock: { turnId: nextTurnId, playerId: botPlayerId, claimedBy, claimedAt: now },
-    });
-  });
-  return result.committed;
-}
-
-export async function clearBotTurnLock(roomId: string, claimedBy: DuoSeat): Promise<void> {
-  const db = duoDatabase();
-  await runTransaction(ref(db, roomPath(roomId)), (room: DuoRoom | null) => {
-    if (!room) return room;
-    if (room.botTurnLock?.claimedBy !== claimedBy) return room;
-    return stripUndefinedDeep({ ...room, botTurnLock: null });
-  });
 }

@@ -8,13 +8,24 @@ export const metadata: Metadata = {
   title: "Hamsa Nomads",
   description:
     "Build · Trade · Explore — a mobile-first, themeable hex-board trading game. Pass-and-play or online with friends.",
-  manifest: withBasePath("/manifest.json"),
+  manifest: withBasePath("/manifest.webmanifest"),
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Hamsa Nomads",
+    title: "Hamsa Catan",
   },
-  icons: { icon: withBasePath("/icon.svg"), apple: withBasePath("/icon.svg") },
+  // app/favicon.ico, app/icon.png and app/apple-icon.png are generated from
+  // public/icon.svg (the single source of truth). The explicit entries below
+  // exist because Next's file-convention links skip the GitHub Pages
+  // basePath; duplicates on basePath-less builds are harmless.
+  icons: {
+    icon: [
+      { url: withBasePath("/favicon.ico"), type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+      { url: withBasePath("/icon.svg"), type: "image/svg+xml" },
+      { url: withBasePath("/icons/icon-192.png"), type: "image/png", sizes: "192x192" },
+    ],
+    apple: [{ url: withBasePath("/apple-icon.png"), sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {

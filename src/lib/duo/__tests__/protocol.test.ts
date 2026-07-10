@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { makeState } from "../../../game/__tests__/helpers";
 import { normalizePlayerSetups } from "../../../game/player-control";
 import {
+  BOT_LOCK_TTL_MS,
+  canClaimBotLock,
   canonicalPlayerSetups,
   devicePlayerSetups,
   generateRoomCode,
@@ -70,7 +72,7 @@ describe("turn lock + optimistic concurrency (2-player sync)", () => {
     expect(validateProposal(room, proposal)).toEqual({ ok: false, reason: "stale-revision" });
   });
 
-  it("lets the HOST publish a bot seat's turn — and nobody else", () => {
+  it("lets ANY connected human publish a bot seat's turn (lock arbitrates who actually runs it)", () => {
     const players = {
       "0": { name: "Moshe", joined: true, type: "human" },
       "1": { name: "Leah", joined: true, type: "human" },
@@ -78,7 +80,11 @@ describe("turn lock + optimistic concurrency (2-player sync)", () => {
     };
     const room = makeRoomState("2", 4, players); // bot seat is active
     expect(validateProposal(room, { seat: "0", baseRevision: 4, snapshot: room.snapshot })).toEqual({ ok: true });
-    expect(validateProposal(room, { seat: "1", baseRevision: 4, snapshot: room.snapshot })).toEqual({
+    expect(validateProposal(room, { seat: "1", baseRevision: 4, snapshot: room.snapshot })).toEqual({ ok: true });
+    // Another bot seat may never "publish" a turn — bots don't run devices.
+    const withTwoBots = { ...players, "3": { name: "Bot 4", joined: true, type: "bot", botDifficulty: "normal" } };
+    const room2 = makeRoomState("2", 4, withTwoBots);
+    expect(validateProposal(room2, { seat: "3", baseRevision: 4, snapshot: room2.snapshot })).toEqual({
       ok: false,
       reason: "not-your-turn",
     });
@@ -228,7 +234,11 @@ describe("2–4 player seat configuration", () => {
     expect(nextFreeHumanSeat(players)).toBeNull();
   });
 
-  it("device setups: only the host runs bots; everyone else sees them remote", () => {
+  it("device setups: every seat but my own — human or bot — renders as remote", () => {
+    // The on-screen client is bound to this device's own playerID, so it can
+    // never legally dispatch moves for another seat (boardgame.io rejects
+    // "not your turn"). Bot turns are replayed on a separate HEADLESS client
+    // (see botRunner.ts) behind the botTurnLock, never via this on-screen one.
     const players: any = {
       "0": { name: "Moshe", joined: true, type: "human" },
       "1": { name: "Leah", joined: true, type: "human" },
@@ -238,8 +248,8 @@ describe("2–4 player seat configuration", () => {
     expect(devicePlayerSetups(players, "0")).toEqual([
       { mode: "human" },
       { mode: "remote" },
-      { mode: "bot", botDifficulty: "hard" },
-      { mode: "bot", botDifficulty: "normal" },
+      { mode: "remote" },
+      { mode: "remote" },
     ]);
     expect(devicePlayerSetups(players, "1")).toEqual([
       { mode: "remote" },
@@ -247,6 +257,20 @@ describe("2–4 player seat configuration", () => {
       { mode: "remote" },
       { mode: "remote" },
     ]);
+  });
+
+  it("bot turn lock: free, cross-turn, and expired locks are all claimable; a fresh same-turn lock is not", () => {
+    const now = 1_000_000;
+    expect(canClaimBotLock(null, "room:1:2", now)).toBe(true);
+    expect(canClaimBotLock(undefined, "room:1:2", now)).toBe(true);
+    const fresh = { turnId: "room:1:2", playerId: "2", claimedBy: "0" as const, claimedAt: now - 500 };
+    expect(canClaimBotLock(fresh, "room:1:2", now)).toBe(false); // someone just claimed it
+    const otherTurn = { ...fresh, turnId: "room:1:1" }; // stale from a PREVIOUS bot turn
+    expect(canClaimBotLock(otherTurn, "room:1:2", now)).toBe(true);
+    const expired = { ...fresh, claimedAt: now - BOT_LOCK_TTL_MS - 1 }; // claimer vanished mid-run
+    expect(canClaimBotLock(expired, "room:1:2", now)).toBe(true);
+    const justUnderTtl = { ...fresh, claimedAt: now - BOT_LOCK_TTL_MS + 1 };
+    expect(canClaimBotLock(justUnderTtl, "room:1:2", now)).toBe(false);
   });
 
   it("treats legacy rooms without seat types as all-human (2P wife game)", () => {

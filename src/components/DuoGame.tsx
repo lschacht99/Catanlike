@@ -9,21 +9,28 @@ import { createDuoGame } from "@/game/game";
 import { getTheme } from "@/game/themes";
 import GameBoardPlay from "./GameBoardPlay";
 import {
+  BOT_LOCK_TTL_MS,
+  HOST_SEAT,
   canonicalPlayerSetups,
   devicePlayerSetups,
   humanSeats,
+  isBotSlot,
   isNewerSnapshot,
+  roomSeats,
   seatName,
   serializeSnapshot,
   reviveSnapshot,
   shouldNotifyTurn,
+  turnId,
   turnNotificationText,
   type DuoRoom,
   type DuoSeat,
   type DuoSnapshot,
 } from "@/lib/duo/protocol";
 import {
+  claimBotTurnLock,
   claimTurnNotification,
+  clearBotTurnLock,
   fetchRoom,
   isPresent,
   publishSnapshot,
@@ -31,6 +38,7 @@ import {
   startPresence,
   watchRoom,
 } from "@/lib/duo/room";
+import { runBotTurn } from "@/lib/duo/botRunner";
 import {
   disableTurnNotifications,
   enableTurnNotifications,
@@ -67,9 +75,11 @@ function playTurnChime(): void {
  * runs a local boardgame.io client rebuilt from the latest shared snapshot;
  * a move made HERE is published with a revision compare-and-swap (rejected
  * if out of turn or stale), and a snapshot arriving from ANOTHER phone
- * remounts the local client. Bot seats are driven by the HOST device only
- * (everyone else sees them as remote players). Refresh/reconnect just
- * re-reads the latest snapshot.
+ * remounts the local client. On a bot's turn every connected human races
+ * for the botTurnLock (host preferred); the winner replays the shared bot
+ * engine on a headless client and publishes the result through the same
+ * pipeline as a human move — see the "bot turns" effect below. Refresh /
+ * reconnect just re-reads the latest snapshot.
  */
 export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const theme = getTheme("hamsa");
@@ -133,6 +143,47 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
     if (base) lastBannerTurn.current = `${base.snapshot.ctx.turn}:${base.snapshot.ctx.currentPlayer}`;
   }, [base]);
 
+  // Turn passed to a waiting human → maybe send ONE push (deduped, never to
+  // a bot seat). Shared by the human publish path and the bot runner.
+  const notifyTurnChange = useCallback(
+    async (previousActivePlayer: string, nextCtx: DuoSnapshot["ctx"]) => {
+      const currentRoom = roomRef.current;
+      const decision = shouldNotifyTurn({
+        roomId,
+        previousActivePlayer,
+        nextCtx,
+        lastNotifiedTurnId: currentRoom?.lastNotifiedTurnId,
+        players: currentRoom?.players,
+      });
+      if (!decision.notify || !currentRoom) return;
+      const claimed = await claimTurnNotification(roomId, decision.turnId);
+      const subscription = currentRoom.players[decision.waitingSeat]?.pushSubscription;
+      if (claimed && subscription) {
+        const text = turnNotificationText(seatName(currentRoom, decision.waitingSeat));
+        await sendTurnPush({
+          subscriptionJson: subscription,
+          title: text.title,
+          body: text.body,
+          url: `${window.location.origin}${window.location.pathname}?room=${roomId}`,
+        });
+      }
+    },
+    [roomId],
+  );
+
+  // Out of turn / stale / raced — hard re-sync from the source of truth.
+  const resync = useCallback(async () => {
+    setStatus("reconnecting");
+    const fresh = await fetchRoom(roomId);
+    if (fresh) {
+      appliedRevision.current = fresh.revision;
+      const snap = reviveSnapshot(fresh.snapshot);
+      lastCtxRef.current = snap.ctx;
+      setBase({ snapshot: snap, revision: fresh.revision });
+      setStatus("online");
+    }
+  }, [roomId]);
+
   // --- publish a locally produced state -------------------------------------
   const onLocalState = useCallback(
     (G: GameState, ctx: BoardProps<GameState>["ctx"]) => {
@@ -151,44 +202,76 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
           appliedRevision.current = result.revision;
           lastCtxRef.current = snapshot.ctx;
           setStatus("online");
-          // Turn passed to the other phone → maybe send ONE push (deduped).
-          const currentRoom = roomRef.current;
-          const decision = shouldNotifyTurn({
-            roomId,
-            previousActivePlayer: previous?.currentPlayer ?? seat,
-            nextCtx: snapshot.ctx,
-            lastNotifiedTurnId: currentRoom?.lastNotifiedTurnId,
-            players: currentRoom?.players,
-          });
-          if (decision.notify && currentRoom) {
-            const claimed = await claimTurnNotification(roomId, decision.turnId);
-            const subscription = currentRoom.players[decision.waitingSeat]?.pushSubscription;
-            if (claimed && subscription) {
-              const text = turnNotificationText(seatName(currentRoom, decision.waitingSeat));
-              await sendTurnPush({
-                subscriptionJson: subscription,
-                title: text.title,
-                body: text.body,
-                url: `${window.location.origin}${window.location.pathname}?room=${roomId}`,
-              });
-            }
-          }
+          await notifyTurnChange(previous?.currentPlayer ?? seat, snapshot.ctx);
         } else {
-          // Out of turn / stale / raced — hard re-sync from the source of truth.
-          setStatus("reconnecting");
-          const fresh = await fetchRoom(roomId);
-          if (fresh) {
-            appliedRevision.current = fresh.revision;
-            const snap = reviveSnapshot(fresh.snapshot);
-            lastCtxRef.current = snap.ctx;
-            setBase({ snapshot: snap, revision: fresh.revision });
-            setStatus("online");
-          }
+          await resync();
         }
       });
     },
-    [roomId, seat],
+    [roomId, seat, notifyTurnChange, resync],
   );
+
+  // --- bot turns: claim the room-wide lock, replay the shared bot engine ----
+  // Every human device watches for a bot's turn. The host tries first (with
+  // a natural 600–1200ms "thinking" pause); other humans hang back a few
+  // seconds as fallback; a second timer takes over a STALE lock whose
+  // claimer disappeared mid-run. The RTDB transaction guarantees exactly one
+  // winner per turnId, and the revision CAS makes any duplicate a no-op.
+  const botAttempt = useRef("");
+  useEffect(() => {
+    if (!base) return;
+    const snapCtx = base.snapshot.ctx;
+    const players = roomRef.current?.players ?? {};
+    if (!isBotSlot(players[snapCtx.currentPlayer as DuoSeat])) return;
+    const tid = turnId(roomId, snapCtx);
+    const revisionAtStart = base.revision;
+    let cancelled = false;
+
+    const attempt = async (takeover: boolean) => {
+      if (cancelled || appliedRevision.current !== revisionAtStart) return;
+      if (!takeover && botAttempt.current === tid) return;
+      const claimed = await claimBotTurnLock(roomId, {
+        turnId: tid,
+        playerId: snapCtx.currentPlayer,
+        claimedBy: seat,
+      });
+      if (!claimed || cancelled) return;
+      botAttempt.current = tid;
+      setStatus("syncing");
+      try {
+        const result = runBotTurn({
+          snapshot: base.snapshot,
+          botSeat: snapCtx.currentPlayer,
+          variant: base.snapshot.G.variant ?? "base",
+        });
+        if (!result || cancelled) return;
+        const wire = serializeSnapshot(result.G, result.ctx, canonicalPlayerSetups(roomRef.current?.players ?? {}));
+        const pub = await publishSnapshot({ roomId, seat, baseRevision: revisionAtStart, snapshot: wire });
+        if (cancelled) return;
+        if (pub.ok) {
+          appliedRevision.current = pub.revision;
+          lastCtxRef.current = wire.ctx;
+          setBase({ snapshot: reviveSnapshot(wire), revision: pub.revision });
+          setStatus("online");
+          await notifyTurnChange(snapCtx.currentPlayer, wire.ctx);
+        } else {
+          await resync();
+        }
+      } finally {
+        await clearBotTurnLock(roomId, tid);
+      }
+    };
+
+    const headStart = seat === HOST_SEAT ? 600 + Math.random() * 600 : 3600 + Math.random() * 900;
+    const t1 = window.setTimeout(() => void attempt(false), headStart);
+    const t2 = window.setTimeout(() => void attempt(true), headStart + BOT_LOCK_TTL_MS + 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, roomId, seat]);
 
   // --- local boardgame.io client rebuilt per applied remote revision --------
   const DuoClient = useMemo(() => {
@@ -203,9 +286,10 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
       playerSetups: setups.length === G.numPlayers ? setups : G.playerSetups,
     };
     const playerModes = (localG.playerSetups ?? []).map((s) => s.mode);
+    const botSeats = roomSeats(roomRef.current?.players ?? {}).filter((s) => isBotSlot(roomRef.current?.players?.[s]));
     const startPhase = ctx.phase === "setup" ? ("setup" as const) : ("play" as const);
     const Board = (props: BoardProps<GameState>) => (
-      <DuoBoard {...props} onLocalState={onLocalState} theme={theme} playerModes={playerModes} variant={G.variant ?? "base"} />
+      <DuoBoard {...props} onLocalState={onLocalState} theme={theme} playerModes={playerModes} variant={G.variant ?? "base"} remoteBotSeats={botSeats} />
     );
     return Client<GameState>({
       game: createDuoGame(localG, startPhase, ctx.playOrderPos ?? Number(ctx.currentPlayer)),
@@ -333,6 +417,7 @@ function DuoBoard(
     theme: ReturnType<typeof getTheme>;
     playerModes: ("human" | "remote" | "bot")[];
     variant: "base" | "cities-knights";
+    remoteBotSeats: string[];
   },
 ) {
   const { onLocalState, G, ctx } = props;
@@ -351,6 +436,7 @@ function DuoBoard(
       theme={props.theme}
       playerModes={props.playerModes}
       variant={props.variant}
+      remoteBotSeats={props.remoteBotSeats}
       handoffGate={false}
     />
   );

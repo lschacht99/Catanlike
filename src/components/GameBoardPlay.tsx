@@ -20,7 +20,6 @@ import {
   COMMODITY_LABELS,
   PLAYER_COLORS,
   PROGRESS_CARD_LABELS,
-  TOKEN_PIPS,
   totalResources,
   TRACK_COMMODITY,
   TRACK_KEYS_ORDERED,
@@ -28,8 +27,6 @@ import {
   type BuildableKind,
 } from "@/game/constants";
 import {
-  canAfford,
-  getGeometry,
   pieceCounts,
   validBanditTiles,
   validCitySpots,
@@ -38,7 +35,7 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
-import { botProposeTrade, planBankTrade } from "@/game/ai/trade";
+import { chooseBotAction } from "@/game/ai/turn";
 import { hasMerchantGuild, maritimeRate, playerHarborTypes } from "@/game/harbors";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
@@ -63,6 +60,13 @@ export interface GameBoardPlayProps extends BoardProps<GameState> {
    * there is nobody to hide the hand from.
    */
   handoffGate?: boolean;
+  /**
+   * Seat ids that are bots in a duo-online room. There, EVERY non-local
+   * seat is passed as playerModes="remote" (a bot can't be driven by an
+   * on-screen client bound to another seat's playerID) — this lets the UI
+   * still show "🤖 thinking" instead of the generic reserved-seat banner.
+   */
+  remoteBotSeats?: string[];
 }
 
 type ExtendedMoves = BoardProps<GameState>["moves"] & {
@@ -94,6 +98,7 @@ export default function GameBoardPlay({
   playerModes = [],
   variant = "base",
   handoffGate = true,
+  remoteBotSeats = [],
 }: GameBoardPlayProps) {
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
@@ -112,8 +117,16 @@ export default function GameBoardPlay({
   const pieces = pieceCounts(G, current);
   const gameover = ctx.gameover as { winner: string } | undefined;
   const playerSetups = normalizePlayerSetups(G.numPlayers, G.playerSetups, playerModes);
+  const remoteBotSeatSet = useMemo(() => new Set(remoteBotSeats), [remoteBotSeats]);
+  // Local-loop CPU (pass-and-play) only — an online bot seat is deliberately
+  // NOT included here: it must stay "remote" so this on-screen client (bound
+  // to its own playerID) never tries to dispatch moves for another seat.
   const currentIsCpu = isBotSeat(G, current);
   const currentIsRemote = playerSetups[Number(current)]?.mode === "remote";
+  // Label-only: an online bot seat renders as "remote" above (so taps stay
+  // blocked and the auto-play effect stays off), but the UI should still
+  // read "🤖 thinking" instead of the generic reserved-seat banner.
+  const currentIsRemoteBot = currentIsRemote && remoteBotSeatSet.has(current);
   const canControlCurrent = canLocalDeviceControlSeat(G, current);
   const boardMoves = moves as ExtendedMoves;
   const names = useMemo(() => G.playerNames ?? G.names ?? [], [G.playerNames, G.names]);
@@ -135,7 +148,7 @@ export default function GameBoardPlay({
     .map((id) => ({
       id,
       name: names[Number(id)],
-      isBot: playerModes[Number(id)] === "bot",
+      isBot: playerModes[Number(id)] === "bot" || remoteBotSeatSet.has(id),
       cardCount: totalResources(G.players[id].resources),
     }));
 
@@ -197,7 +210,7 @@ export default function GameBoardPlay({
   let instruction = "";
 
   if (gameover) instruction = "";
-  else if (currentIsCpu) instruction = `${names[Number(current)]} is thinking…`;
+  else if (currentIsCpu || currentIsRemoteBot) instruction = `${names[Number(current)]} is thinking…`;
   else if (inSetup) {
     if (G.pendingSetupSettlement === null) {
       highlightVertices = validSettlementSpots(G, current, true);
@@ -236,80 +249,18 @@ export default function GameBoardPlay({
     // While a bot's own trade offer is awaiting a human answer, wait.
     if (G.pendingTrade) return;
     const timer = window.setTimeout(() => {
-      if (ctx.phase === "setup") {
-        if (G.pendingSetupSettlement === null) {
-          const spot = pickBestSettlement(G, validSettlementSpots(G, current, true));
-          if (spot) moves.placeSettlement(spot);
-        } else {
-          const road = pickBestRoad(G, current, validRoadSpots(G, current, true));
-          if (road) moves.placeRoad(road);
-        }
-        return;
-      }
-      if (!G.hasRolled) {
-        moves.rollDice();
-        return;
-      }
-      if (G.mustMoveBandit) {
-        const tile = pickBestBanditTile(G, current, validBanditTiles(G));
-        if (tile !== null) moves.moveBandit(tile);
-        return;
-      }
-      // Once per turn, a bot may offer a trade to a human rival.
-      if (botProposeRef.current !== ctx.turn) {
-        botProposeRef.current = ctx.turn;
-        const offer = botProposeTrade(G, current, Math.random);
-        if (offer && boardMoves.proposeTrade) {
-          boardMoves.proposeTrade(offer.to, offer.give, offer.giveAmount, offer.receive, offer.receiveAmount);
-          return;
-        }
-      }
-      const hand = G.players[current].resources;
-      const cpuCards = G.players[current].progressCards ?? [];
-      // Only auto-play cards that need no interactive choice, so the bot can
-      // never stall on a card that requires a picker.
-      const noChoiceCards = new Set(["harvest", "oreRush", "roadworks", "merchant", "warlord", "levy"]);
-      const playable = cpuCards.find((c) => noChoiceCards.has(c));
-      if (variant === "cities-knights" && playable && boardMoves.playProgressCard) {
-        boardMoves.playProgressCard(playable);
-        return;
-      }
-      const inactive = Object.entries(G.knights ?? {}).find(([id, owner]) => owner === current && !G.activeKnights?.[id])?.[0];
-      if (variant === "cities-knights" && inactive && hand.grain > 0 && boardMoves.activateKnight) {
-        boardMoves.activateKnight(inactive);
-        return;
-      }
-      const city = pickBestCity(G, validCitySpots(G, current));
-      if (city && canAfford(hand, "city")) {
-        moves.buildCity(city);
-        return;
-      }
-      const settlement = pickBestSettlement(G, validSettlementSpots(G, current, false));
-      if (settlement && canAfford(hand, "settlement")) {
-        moves.buildSettlement(settlement);
-        return;
-      }
-      const knight = pickBestCity(G, validKnightSpots(G, current));
-      if (variant === "cities-knights" && knight && canAfford(hand, "knight") && boardMoves.buildKnight) {
-        boardMoves.buildKnight(knight);
-        return;
-      }
-      const road = pickBestRoad(G, current, validRoadSpots(G, current, false));
-      if (road && canAfford(hand, "road")) {
-        moves.buildRoad(road);
-        return;
-      }
-      // Nothing affordable to build: bank-trade toward a needed card at the
-      // bot's OWN best legal maritime rate (per-player harbors), then retry.
-      const swap = planBankTrade(G, current);
-      if (swap) {
-        moves.bankTrade(swap.give, swap.receive);
-        return;
-      }
-      moves.endTurn();
+      // The once-per-turn trade-offer stage only unlocks after roll/bandit,
+      // and is marked attempted whether or not an offer materializes.
+      const offerStageReached = ctx.phase !== "setup" && G.hasRolled && !G.mustMoveBandit;
+      const allowTradeOffer = offerStageReached && botProposeRef.current !== ctx.turn;
+      if (allowTradeOffer) botProposeRef.current = ctx.turn;
+      const action = chooseBotAction(G, ctx, current, { variant, allowTradeOffer, rng: Math.random });
+      if (!action) return;
+      const dispatch = (boardMoves as Record<string, ((...args: unknown[]) => void) | undefined>)[action.move];
+      dispatch?.(...action.args);
     }, inSetup ? 420 : 650);
     return () => window.clearTimeout(timer);
-  }, [G, boardMoves, ctx.phase, ctx.turn, current, currentIsCpu, gameover, inSetup, moves, variant]);
+  }, [G, boardMoves, ctx, current, currentIsCpu, gameover, inSetup, moves, variant]);
 
   function onVertexTap(id: string) {
     if (currentIsCpu || currentIsRemote || privacyGate) return;
@@ -524,9 +475,15 @@ export default function GameBoardPlay({
         </div>
       )}
 
-      {currentIsRemote && !gameover && (
+      {currentIsRemote && !currentIsRemoteBot && !gameover && (
         <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-sky-300/30 bg-sky-950/90 p-3 text-center text-sm font-bold text-sky-100 shadow-2xl">
           Remote seat reserved for {names[Number(current)]}. Only that remote player can act for this seat online.
+        </div>
+      )}
+
+      {currentIsRemoteBot && !gameover && (
+        <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-amber-300/30 bg-amber-950/90 p-3 text-center text-sm font-bold text-amber-100 shadow-2xl">
+          🤖 {names[Number(current)]} is thinking…
         </div>
       )}
 
@@ -560,46 +517,3 @@ export default function GameBoardPlay({
   );
 }
 
-function tokenWeight(token: number | null): number { return token ? TOKEN_PIPS[token] ?? 0 : 0; }
-function vertexScore(G: GameState, vertexId: string): number {
-  const geo = getGeometry(G.board);
-  const resources = new Set<string>();
-  let score = 0;
-  for (const tileId of geo.vertices[vertexId].tiles) {
-    const tile = G.board.tiles[tileId];
-    if (!tile || tile.resource === "desert") continue;
-    resources.add(tile.resource);
-    score += tokenWeight(tile.token) * 2;
-  }
-  return score + resources.size * 1.8;
-}
-function pickBestSettlement(G: GameState, spots: string[]): string | null { return spots.length === 0 ? null : [...spots].sort((a, b) => vertexScore(G, b) - vertexScore(G, a))[0]; }
-function pickBestRoad(G: GameState, player: string, spots: string[]): string | null {
-  if (spots.length === 0) return null;
-  const geo = getGeometry(G.board);
-  return [...spots].sort((a, b) => {
-    const edgeA = geo.edges[a]; const edgeB = geo.edges[b];
-    const scoreA = Math.max(vertexScore(G, edgeA.a), vertexScore(G, edgeA.b));
-    const scoreB = Math.max(vertexScore(G, edgeB.a), vertexScore(G, edgeB.b));
-    const ownA = Number(G.buildings[edgeA.a]?.player === player || G.buildings[edgeA.b]?.player === player);
-    const ownB = Number(G.buildings[edgeB.a]?.player === player || G.buildings[edgeB.b]?.player === player);
-    return scoreB + ownB - (scoreA + ownA);
-  })[0];
-}
-function pickBestCity(G: GameState, spots: string[]): string | null { return spots.length === 0 ? null : [...spots].sort((a, b) => vertexScore(G, b) - vertexScore(G, a))[0]; }
-function pickBestBanditTile(G: GameState, player: string, tileIds: number[]): number | null {
-  if (tileIds.length === 0) return null;
-  const geo = getGeometry(G.board);
-  return [...tileIds].sort((a, b) => banditScore(G, geo, player, b) - banditScore(G, geo, player, a))[0];
-}
-function banditScore(G: GameState, geo: ReturnType<typeof getGeometry>, player: string, tileId: number): number {
-  const tile = G.board.tiles[tileId];
-  let score = tokenWeight(tile?.token ?? null);
-  for (const vertex of Object.values(geo.vertices)) {
-    if (!vertex.tiles.includes(tileId)) continue;
-    const building = G.buildings[vertex.id];
-    if (!building) continue;
-    score += building.player === player ? -4 : 6;
-  }
-  return score;
-}

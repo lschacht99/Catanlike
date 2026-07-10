@@ -13,11 +13,12 @@ import type { BotDifficulty, GameState, GameVariant, PlayerSetup } from "@/types
  * revision. Refresh or reconnect just re-reads the latest snapshot — there
  * is no replay log.
  *
- * Bots: bot seats live in the room config and are DRIVEN BY THE HOST DEVICE
- * (seat "0") only — the host's local client marks them `mode:"bot"` so its
- * bot loop plays them, and publishes the results; every other device sees
- * them as `mode:"remote"` and just watches. That keeps exactly one driver
- * per bot with no coordination protocol.
+ * Bots: bot seats live in the room config. Every on-screen client renders
+ * them as `mode:"remote"`; when it's a bot's turn, connected human devices
+ * race for the `botTurnLock` (host gets a head start), and ONLY the lock
+ * winner replays the shared bot engine on a headless client and publishes
+ * the result through the same revision-checked pipeline as human moves.
+ * A stale lock (claimer refreshed/crashed) is taken over after its TTL.
  */
 
 export type DuoSeat = "0" | "1" | "2" | "3";
@@ -68,6 +69,36 @@ export interface DuoRoom {
   lastNotifiedTurnId?: string;
   /** Presence heartbeats (epoch ms) so each side can show "opponent online". */
   presence?: Partial<Record<DuoSeat, number>>;
+  /** Who is currently allowed to run the active bot's turn (see claim rules). */
+  botTurnLock?: BotTurnLock | null;
+}
+
+/** One device claims this before replaying a bot's turn; others skip. */
+export interface BotTurnLock {
+  turnId: string;
+  /** The bot seat whose turn is being run. */
+  playerId: string;
+  /** The human seat that runs it. */
+  claimedBy: DuoSeat;
+  claimedAt: number;
+}
+
+/**
+ * A same-turn lock younger than this is respected; older ones are treated
+ * as abandoned (claimer refreshed, crashed, lost signal) and taken over.
+ * Must exceed the bot runner's 10s force-end budget.
+ */
+export const BOT_LOCK_TTL_MS = 12_000;
+
+/** Pure claim rule: free, from another turn, or expired → claimable. */
+export function canClaimBotLock(
+  existing: BotTurnLock | null | undefined,
+  turnIdValue: string,
+  now: number = Date.now(),
+): boolean {
+  if (!existing) return true;
+  if (existing.turnId !== turnIdValue) return true;
+  return now - (existing.claimedAt ?? 0) > BOT_LOCK_TTL_MS;
 }
 
 /** What the lobby collects per seat before the room exists. */
@@ -149,19 +180,16 @@ export function canonicalPlayerSetups(players: DuoPlayers): PlayerSetup[] {
 }
 
 /**
- * The playerSetups THIS device runs its local client with: its own seat is
- * the only "human"; bot seats run as real bots ONLY on the host device (so
- * exactly one phone drives them); everything else renders as "remote".
+ * The playerSetups THIS device runs its ON-SCREEN client with: its own seat
+ * is the only "human", everything else — other humans AND bots — renders as
+ * "remote". Bot turns are never driven by the on-screen client (it is
+ * mounted with this device's playerID and cannot move for other seats);
+ * they run on a headless client behind the botTurnLock instead.
  */
 export function devicePlayerSetups(players: DuoPlayers, mySeat: DuoSeat): PlayerSetup[] {
-  return roomSeats(players).map((s) => {
-    if (s === mySeat) return { mode: "human" as const };
-    const slot = players[s];
-    if (isBotSlot(slot) && mySeat === HOST_SEAT) {
-      return { mode: "bot" as const, botDifficulty: slot?.botDifficulty ?? "normal" };
-    }
-    return { mode: "remote" as const };
-  });
+  return roomSeats(players).map((s) =>
+    s === mySeat ? { mode: "human" as const } : { mode: "remote" as const },
+  );
 }
 
 /** 6-digit numeric room code, zero-padded ("042137"). */
@@ -186,9 +214,11 @@ export type ProposalRejection =
 /**
  * Turn lock + optimistic concurrency: an action proposal is only legal when
  * it comes from the seat whose turn it is IN THE CURRENT ROOM STATE — or
- * from the HOST when the active seat is a bot (the host drives bots) — and
- * is based on exactly the room's current revision (so a phone that raced or
- * replayed an old tab loses cleanly and just re-syncs).
+ * from any HUMAN seat when the active seat is a bot (the botTurnLock picks
+ * which human actually runs it, host preferred; the revision CAS makes a
+ * duplicate run lose anyway) — and is based on exactly the room's current
+ * revision (a phone that raced or replayed an old tab loses cleanly and
+ * just re-syncs).
  */
 export function validateProposal(
   room: Pick<DuoRoom, "revision" | "snapshot" | "players">,
@@ -202,7 +232,8 @@ export function validateProposal(
   }
   const active = room.snapshot.ctx.currentPlayer;
   const activeIsBot = isBotSlot(room.players?.[active as DuoSeat]);
-  const allowed = active === proposal.seat || (activeIsBot && proposal.seat === HOST_SEAT);
+  const proposerIsHuman = !isBotSlot(room.players?.[proposal.seat]);
+  const allowed = active === proposal.seat || (activeIsBot && proposerIsHuman);
   if (!allowed) {
     return { ok: false, reason: "not-your-turn" };
   }
@@ -323,6 +354,7 @@ export function reviveSnapshot(raw: DuoSnapshot): DuoSnapshot {
   G.playedDevCardThisTurn ??= false;
   G.barbarianPosition ??= 0;
   G.tradeRate ??= 4;
+  G.difficulties ??= Array.from({ length: numPlayers }, () => "normal");
   if (typeof G.banditTile !== "number") G.banditTile = -1;
   for (const id of Object.keys(G.players ?? {})) {
     const p = G.players[id];

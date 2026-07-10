@@ -35,7 +35,7 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
-import { runBotTurn } from "@/game/bot-engine";
+import { chooseBotAction } from "@/game/ai/turn";
 import { hasMerchantGuild, maritimeRate, playerHarborTypes } from "@/game/harbors";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
@@ -60,6 +60,13 @@ export interface GameBoardPlayProps extends BoardProps<GameState> {
    * there is nobody to hide the hand from.
    */
   handoffGate?: boolean;
+  /**
+   * Seat ids that are bots in a duo-online room. There, EVERY non-local
+   * seat is passed as playerModes="remote" (a bot can't be driven by an
+   * on-screen client bound to another seat's playerID) — this lets the UI
+   * still show "🤖 thinking" instead of the generic reserved-seat banner.
+   */
+  remoteBotSeats?: string[];
 }
 
 type ExtendedMoves = BoardProps<GameState>["moves"] & {
@@ -91,6 +98,7 @@ export default function GameBoardPlay({
   playerModes = [],
   variant = "base",
   handoffGate = true,
+  remoteBotSeats = [],
 }: GameBoardPlayProps) {
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
@@ -109,8 +117,16 @@ export default function GameBoardPlay({
   const pieces = pieceCounts(G, current);
   const gameover = ctx.gameover as { winner: string } | undefined;
   const playerSetups = normalizePlayerSetups(G.numPlayers, G.playerSetups, playerModes);
+  const remoteBotSeatSet = useMemo(() => new Set(remoteBotSeats), [remoteBotSeats]);
+  // Local-loop CPU (pass-and-play) only — an online bot seat is deliberately
+  // NOT included here: it must stay "remote" so this on-screen client (bound
+  // to its own playerID) never tries to dispatch moves for another seat.
   const currentIsCpu = isBotSeat(G, current);
   const currentIsRemote = playerSetups[Number(current)]?.mode === "remote";
+  // Label-only: an online bot seat renders as "remote" above (so taps stay
+  // blocked and the auto-play effect stays off), but the UI should still
+  // read "🤖 thinking" instead of the generic reserved-seat banner.
+  const currentIsRemoteBot = currentIsRemote && remoteBotSeatSet.has(current);
   const canControlCurrent = canLocalDeviceControlSeat(G, current);
   const boardMoves = moves as ExtendedMoves;
   const names = useMemo(() => G.playerNames ?? G.names ?? [], [G.playerNames, G.names]);
@@ -132,7 +148,7 @@ export default function GameBoardPlay({
     .map((id) => ({
       id,
       name: names[Number(id)],
-      isBot: playerModes[Number(id)] === "bot",
+      isBot: playerModes[Number(id)] === "bot" || remoteBotSeatSet.has(id),
       cardCount: totalResources(G.players[id].resources),
     }));
 
@@ -194,7 +210,7 @@ export default function GameBoardPlay({
   let instruction = "";
 
   if (gameover) instruction = "";
-  else if (currentIsCpu) instruction = `${names[Number(current)]} is thinking…`;
+  else if (currentIsCpu || currentIsRemoteBot) instruction = `${names[Number(current)]} is thinking…`;
   else if (inSetup) {
     if (G.pendingSetupSettlement === null) {
       highlightVertices = validSettlementSpots(G, current, true);
@@ -233,17 +249,18 @@ export default function GameBoardPlay({
     // While a bot's own trade offer is awaiting a human answer, wait.
     if (G.pendingTrade) return;
     const timer = window.setTimeout(() => {
-      const allowTradeProposal = !inSetup && botProposeRef.current !== ctx.turn;
-      if (allowTradeProposal) botProposeRef.current = ctx.turn;
-      runBotTurn(boardMoves as unknown as Record<string, (...args: unknown[]) => unknown>, G, current, {
-        variant,
-        allowTradeProposal,
-        rng: Math.random,
-        difficulty: playerSetups[Number(current)]?.botDifficulty ?? "normal",
-      });
+      // The once-per-turn trade-offer stage only unlocks after roll/bandit,
+      // and is marked attempted whether or not an offer materializes.
+      const offerStageReached = ctx.phase !== "setup" && G.hasRolled && !G.mustMoveBandit;
+      const allowTradeOffer = offerStageReached && botProposeRef.current !== ctx.turn;
+      if (allowTradeOffer) botProposeRef.current = ctx.turn;
+      const action = chooseBotAction(G, ctx, current, { variant, allowTradeOffer, rng: Math.random });
+      if (!action) return;
+      const dispatch = (boardMoves as Record<string, ((...args: unknown[]) => void) | undefined>)[action.move];
+      dispatch?.(...action.args);
     }, inSetup ? 420 : 650);
     return () => window.clearTimeout(timer);
-  }, [G, boardMoves, ctx.turn, current, currentIsCpu, gameover, inSetup, playerSetups, variant]);
+  }, [G, boardMoves, ctx, current, currentIsCpu, gameover, inSetup, moves, variant]);
 
   function onVertexTap(id: string) {
     if (currentIsCpu || currentIsRemote || privacyGate) return;
@@ -458,9 +475,15 @@ export default function GameBoardPlay({
         </div>
       )}
 
-      {currentIsRemote && !gameover && (
+      {currentIsRemote && !currentIsRemoteBot && !gameover && (
         <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-sky-300/30 bg-sky-950/90 p-3 text-center text-sm font-bold text-sky-100 shadow-2xl">
           Remote seat reserved for {names[Number(current)]}. Only that remote player can act for this seat online.
+        </div>
+      )}
+
+      {currentIsRemoteBot && !gameover && (
+        <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-amber-300/30 bg-amber-950/90 p-3 text-center text-sm font-bold text-amber-100 shadow-2xl">
+          🤖 {names[Number(current)]} is thinking…
         </div>
       )}
 
@@ -493,3 +516,4 @@ export default function GameBoardPlay({
     </div>
   );
 }
+

@@ -6,6 +6,7 @@ import { initialState } from "@/game/game";
 import { devDeck } from "@/game/constants";
 import { duoDatabase } from "./firebase";
 import {
+  canClaimBotLock,
   canonicalPlayerSetups,
   generateRoomCode,
   nextFreeHumanSeat,
@@ -13,6 +14,7 @@ import {
   stripUndefinedDeep,
   turnId,
   validateProposal,
+  type BotTurnLock,
   type DuoPlayers,
   type DuoRoom,
   type DuoSeat,
@@ -201,6 +203,35 @@ export async function claimTurnNotification(roomId: string, turnIdValue: string)
     (current: string | null) => (current === turnIdValue ? undefined : turnIdValue),
   );
   return result.committed;
+}
+
+/**
+ * Race for the right to run the active bot's turn. Exactly one device wins
+ * per turnId (transactional compare-and-set); a lock older than
+ * BOT_LOCK_TTL_MS is treated as abandoned and taken over, so a claimer
+ * that refreshed or crashed mid-turn never freezes the game.
+ */
+export async function claimBotTurnLock(
+  roomId: string,
+  lock: Omit<BotTurnLock, "claimedAt">,
+): Promise<boolean> {
+  const db = duoDatabase();
+  const result = await runTransaction(
+    ref(db, `${roomPath(roomId)}/botTurnLock`),
+    (current: BotTurnLock | null) =>
+      canClaimBotLock(current, lock.turnId)
+        ? stripUndefinedDeep({ ...lock, claimedAt: Date.now() })
+        : undefined, // someone else holds a fresh claim — abort
+  );
+  return result.committed;
+}
+
+/** Release the lock after the bot turn synced (only if it's still ours). */
+export async function clearBotTurnLock(roomId: string, turnIdValue: string): Promise<void> {
+  const db = duoDatabase();
+  await runTransaction(ref(db, `${roomPath(roomId)}/botTurnLock`), (current: BotTurnLock | null) =>
+    current && current.turnId === turnIdValue ? null : undefined,
+  ).catch(() => {});
 }
 
 /** Store (or clear, with null) a player's push subscription in the room. */

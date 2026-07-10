@@ -42,6 +42,13 @@ export interface DuoSnapshot {
   ctx: DuoCtxSnapshot;
 }
 
+export interface BotTurnLock {
+  turnId: string;
+  playerId: DuoSeat;
+  claimedBy: DuoSeat;
+  claimedAt: number;
+}
+
 export interface DuoPlayerSlot {
   name: string;
   /** Bots are created `joined: true`; human guests flip this when they join. */
@@ -206,6 +213,7 @@ export function isDuoSeat(value: unknown): value is DuoSeat {
 }
 
 export type ProposalRejection =
+  | "bot-lock-mismatch"
   | "not-your-turn"
   | "stale-revision"
   | "bad-revision-step"

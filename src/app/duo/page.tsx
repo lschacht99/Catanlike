@@ -4,26 +4,31 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
-import type { GameVariant } from "@/types/game";
+import type { BotDifficulty, GameVariant } from "@/types/game";
 import { generateBoard } from "@/game/generator";
 import { firebaseConfigured } from "@/lib/duo/firebase";
 import { createRoom, joinRoom } from "@/lib/duo/room";
-import { isValidRoomCode } from "@/lib/duo/protocol";
+import { isValidRoomCode, MAX_DUO_PLAYERS, MIN_DUO_PLAYERS, type DuoSeatConfig } from "@/lib/duo/protocol";
 import { registerServiceWorker } from "@/lib/duo/push";
 import { rememberSeat } from "@/lib/duo/seat";
 import { Card, PrimaryButton, SectionLabel, Shell, TopBar } from "@/components/ui";
 
+const DEFAULT_NAMES = ["Moshe", "Leah", "Player 3", "Player 4"];
+
+function defaultSeat(index: number): DuoSeatConfig {
+  return { type: "human", name: DEFAULT_NAMES[index] ?? `Player ${index + 1}` };
+}
+
 /**
  * "Easy online" lobby: create a private room (6-digit code + optional PIN)
- * or join one — no accounts, works across any networks. Built for exactly
- * two humans on two phones.
+ * or join one — no accounts, works across any networks. 2–4 seats, each
+ * either a human (joins from their own phone) or a bot the host drives.
  */
 function DuoLobbyInner() {
   const router = useRouter();
   const search = useSearchParams();
   const [tab, setTab] = useState<"create" | "join">(search.get("join") ? "join" : "create");
-  const [hostName, setHostName] = useState("Moshe");
-  const [guestName, setGuestName] = useState("Leah");
+  const [seats, setSeats] = useState<DuoSeatConfig[]>([defaultSeat(0), defaultSeat(1)]);
   const [variant, setVariant] = useState<GameVariant>("base");
   const [pin, setPin] = useState("");
   const [joinCode, setJoinCode] = useState(search.get("join") ?? "");
@@ -55,12 +60,25 @@ function DuoLobbyInner() {
     QRCode.toDataURL(inviteLink, { margin: 1, width: 220 }).then(setQr).catch(() => setQr(null));
   }, [inviteLink]);
 
+  function setSeatCount(count: number) {
+    setSeats((prev) =>
+      Array.from({ length: count }, (_, i) => prev[i] ?? defaultSeat(i)),
+    );
+  }
+
+  function patchSeat(index: number, patch: Partial<DuoSeatConfig>) {
+    setSeats((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  }
+
+  const hostName = seats[0]?.name || "Player 1";
+  const otherHumanCount = seats.filter((s, i) => i > 0 && s.type === "human").length;
+
   async function onCreate() {
     setBusy(true);
     setError(null);
     try {
       const board = generateBoard(400, Math.random);
-      const { roomId } = await createRoom({ board, variant, hostName, guestName, pin: pin.trim() });
+      const { roomId } = await createRoom({ board, variant, seats, pin: pin.trim() });
       rememberSeat(roomId, "0", hostName);
       setCreated({ roomId, pin: pin.trim() });
     } catch (e) {
@@ -80,10 +98,16 @@ function DuoLobbyInner() {
       }
       const result = await joinRoom(joinCode.trim(), joinPin.trim(), joinName.trim() || undefined);
       if (!result.ok) {
-        setError(result.reason === "wrong-pin" ? "Wrong room PIN." : "Room not found — check the code.");
+        setError(
+          result.reason === "wrong-pin"
+            ? "Wrong room PIN."
+            : result.reason === "room-full"
+              ? "Every human seat in that room is already taken."
+              : "Room not found — check the code.",
+        );
         return;
       }
-      rememberSeat(joinCode.trim(), "1", joinName.trim() || "Player 2");
+      rememberSeat(joinCode.trim(), result.seat, joinName.trim() || "Player");
       router.push(`/duo/play/?room=${joinCode.trim()}`);
     } catch (e) {
       setError(String((e as Error).message ?? e));
@@ -129,15 +153,72 @@ function DuoLobbyInner() {
       {tab === "create" && !created && (
         <Card>
           <SectionLabel>New private room</SectionLabel>
-          <div className="mt-2 space-y-2">
-            <label className="block text-xs font-semibold text-ink-soft">
-              Your name
-              <input value={hostName} onChange={(e) => setHostName(e.target.value)} className="mt-1 w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink" />
-            </label>
-            <label className="block text-xs font-semibold text-ink-soft">
-              Opponent’s name
-              <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="mt-1 w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink" />
-            </label>
+          <div className="mt-2 space-y-3">
+            <div>
+              <p className="text-xs font-semibold text-ink-soft">Players</p>
+              <div className="mt-1 grid grid-cols-3 gap-2">
+                {Array.from({ length: MAX_DUO_PLAYERS - MIN_DUO_PLAYERS + 1 }, (_, i) => MIN_DUO_PLAYERS + i).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setSeatCount(n)}
+                    className={`rounded-xl border px-2 py-2 text-sm font-black ${seats.length === n ? "border-ink bg-ink text-cream" : "border-line bg-cream text-ink"}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {seats.map((s, i) => (
+                <div key={i} className="rounded-xl border border-line bg-cream p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-ink-soft">
+                      {i === 0 ? "Seat 1 · You" : `Seat ${i + 1}`}
+                    </span>
+                    {i > 0 && (
+                      <div className="ml-auto flex gap-1">
+                        {(["human", "bot"] as const).map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => patchSeat(i, t === "bot" ? { type: t, name: `Bot ${i + 1}`, botDifficulty: s.botDifficulty ?? "normal" } : { type: t, name: DEFAULT_NAMES[i] ?? `Player ${i + 1}` })}
+                            className={`rounded-full px-3 py-1 text-[11px] font-bold ${s.type === t ? "bg-ink text-cream" : "bg-parchment text-ink-soft"}`}
+                          >
+                            {t === "human" ? "🧑 Human" : "🤖 Bot"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {s.type === "human" ? (
+                    <input
+                      value={s.name}
+                      onChange={(e) => patchSeat(i, { name: e.target.value })}
+                      placeholder={`Player ${i + 1}`}
+                      aria-label={`Seat ${i + 1} name`}
+                      className="mt-2 w-full rounded-xl border border-line bg-parchment px-3 py-2 text-sm text-ink"
+                    />
+                  ) : (
+                    <div className="mt-2 flex gap-1">
+                      {(["easy", "normal", "hard"] as const).map((d) => (
+                        <button
+                          key={d}
+                          onClick={() => patchSeat(i, { botDifficulty: d as BotDifficulty })}
+                          className={`flex-1 rounded-xl border px-2 py-1.5 text-xs font-bold capitalize ${(s.botDifficulty ?? "normal") === d ? "border-rust bg-rust text-cream" : "border-line bg-parchment text-ink-soft"}`}
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-[11px] text-ink-faint">
+                Humans join from their own phones with the room code. Bots play automatically —
+                they run on your phone, so keep the app open on their turns.
+              </p>
+            </div>
+
             <label className="block text-xs font-semibold text-ink-soft">
               Optional room PIN (extra privacy)
               <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" placeholder="e.g. 1234" className="mt-1 w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink" />
@@ -158,29 +239,35 @@ function DuoLobbyInner() {
 
       {tab === "create" && created && (
         <Card>
-          <SectionLabel>Room ready — invite your opponent</SectionLabel>
+          <SectionLabel>
+            {otherHumanCount > 0 ? "Room ready — invite the other players" : "Room ready — all opponents are bots"}
+          </SectionLabel>
           <p className="mt-3 text-center text-4xl font-black tracking-[0.3em] text-ink">{created.roomId}</p>
           {created.pin && <p className="mt-1 text-center text-sm text-ink-soft">PIN: <b>{created.pin}</b></p>}
-          {qr && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={qr} alt={`QR code to join room ${created.roomId}`} className="mx-auto mt-3 rounded-xl border border-line" />
+          {otherHumanCount > 0 && (
+            <>
+              {qr && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={qr} alt={`QR code to join room ${created.roomId}`} className="mx-auto mt-3 rounded-xl border border-line" />
+              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => navigator.clipboard?.writeText(inviteLink)}
+                  className="flex-1 rounded-xl border border-line bg-cream py-2 text-xs font-bold text-ink"
+                >
+                  Copy invite link
+                </button>
+                {typeof navigator !== "undefined" && "share" in navigator && (
+                  <button
+                    onClick={() => navigator.share({ title: "Hamsa Nomads", text: `Join my game! Room ${created.roomId}`, url: inviteLink }).catch(() => {})}
+                    className="flex-1 rounded-xl border border-line bg-cream py-2 text-xs font-bold text-ink"
+                  >
+                    Share…
+                  </button>
+                )}
+              </div>
+            </>
           )}
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => navigator.clipboard?.writeText(inviteLink)}
-              className="flex-1 rounded-xl border border-line bg-cream py-2 text-xs font-bold text-ink"
-            >
-              Copy invite link
-            </button>
-            {typeof navigator !== "undefined" && "share" in navigator && (
-              <button
-                onClick={() => navigator.share({ title: "Hamsa Nomads", text: `Join my game! Room ${created.roomId}`, url: inviteLink }).catch(() => {})}
-                className="flex-1 rounded-xl border border-line bg-cream py-2 text-xs font-bold text-ink"
-              >
-                Share…
-              </button>
-            )}
-          </div>
           <PrimaryButton onClick={() => router.push(`/duo/play/?room=${created.roomId}`)} className="mt-3">
             Enter the game
           </PrimaryButton>

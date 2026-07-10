@@ -1,6 +1,6 @@
 "use client";
 
-import type { DuoSeat } from "./protocol";
+import { isDuoSeat, type DuoSeat } from "./protocol";
 
 /**
  * Which seat THIS device claimed in a room, persisted so a refresh (or the
@@ -22,7 +22,7 @@ export function recallSeat(roomId: string): { seat: DuoSeat; name: string } | nu
     const raw = window.localStorage.getItem(key(roomId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { seat?: string; name?: string };
-    if (parsed.seat !== "0" && parsed.seat !== "1") return null;
+    if (!isDuoSeat(parsed.seat)) return null;
     return { seat: parsed.seat, name: parsed.name ?? "" };
   } catch {
     return null;

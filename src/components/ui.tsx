@@ -164,6 +164,13 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: "/duo",
+    label: "Online",
+    icon: (
+      <path d="M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm-7-7h14M10 3c-2 2.2-3 4.4-3 7s1 4.8 3 7c2-2.2 3-4.4 3-7s-1-4.8-3-7Z" />
+    ),
+  },
+  {
     href: "/stats",
     label: "Stats",
     icon: (
@@ -196,7 +203,7 @@ export function BottomNav({ active }: { active: string }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 rounded-xl px-4 py-1 text-[10px] font-bold uppercase tracking-widest ${
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
                 isActive ? "text-rust" : "text-ink-soft"
               }`}
             >

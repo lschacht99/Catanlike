@@ -69,8 +69,8 @@ export default function MultiplayerPage() {
         <Link href="/duo" className="block">
           <Card className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-black text-ink">2-Player Easy Online 💑</p>
-              <p className="text-xs text-ink-soft">Room code + QR, any network, turn notifications. No accounts.</p>
+              <p className="text-sm font-black text-ink">Easy Online · 2–4 players 💑</p>
+              <p className="text-xs text-ink-soft">Room code + QR, any network, humans + bots, turn notifications. No accounts.</p>
             </div>
             <span className="text-rust">▸</span>
           </Card>

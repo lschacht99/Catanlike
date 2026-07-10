@@ -1,8 +1,8 @@
-# Easy 2-Player Online — Free Setup Guide
+# Easy Online (2–4 Players) — Free Setup Guide
 
-Play **Hamsa Nomads** with exactly one other person (you + your wife) from **anywhere** —
-different Wi-Fi, cellular, different cities. No LAN, no accounts, no App Store, no Apple
-Developer account. The whole stack is free:
+Play **Hamsa Nomads** with 2–4 players (you + your wife, friends, or a mix of humans and
+bots) from **anywhere** — different Wi-Fi, cellular, different cities. No LAN, no accounts,
+no App Store, no Apple Developer account. The whole stack is free:
 
 | Piece | Service | Free tier |
 |---|---|---|
@@ -97,10 +97,13 @@ Official docs: <https://developer.apple.com/documentation/usernotifications/send
 <https://developer.mozilla.org/en-US/docs/Web/API/Push_API>
 
 ### 9) Create / join a room
-- Phone A (host): **/duo → Create room** — set your names (defaults: Moshe & Leah), an
+- Phone A (host): **/duo → Create room** — pick the player count (2–4) and set each seat
+  to **Human** (name only) or **Bot** (difficulty: easy/normal/hard, default normal), an
   optional PIN, Standard or Cities & Knights → **Create**. You get a 6-digit code, an
-  invite link, and a QR code.
-- Phone B: scan the QR / tap the link, or **/duo → Join room** and type the code (+ PIN).
+  invite link, and a QR code. Bots need no invite — they run on the host's phone, so keep
+  the app open on their turns.
+- Other phones: scan the QR / tap the link, or **/duo → Join room** and type the code
+  (+ PIN). Each joiner is given the next free human seat.
 - Play! Only the current player can act; the other phone shows “<name>’s turn” and gets
   a push when it becomes theirs. Refreshing or losing signal is fine — reopening the
   room loads the latest state.

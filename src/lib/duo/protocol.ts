@@ -41,6 +41,13 @@ export interface DuoSnapshot {
   ctx: DuoCtxSnapshot;
 }
 
+export interface BotTurnLock {
+  turnId: string;
+  playerId: DuoSeat;
+  claimedBy: DuoSeat;
+  claimedAt: number;
+}
+
 export interface DuoPlayerSlot {
   name: string;
   /** Bots are created `joined: true`; human guests flip this when they join. */
@@ -68,6 +75,8 @@ export interface DuoRoom {
   lastNotifiedTurnId?: string;
   /** Presence heartbeats (epoch ms) so each side can show "opponent online". */
   presence?: Partial<Record<DuoSeat, number>>;
+  /** Per-bot-turn mutex so only one connected human browser drives a bot. */
+  botTurnLock?: BotTurnLock | null;
 }
 
 /** What the lobby collects per seat before the room exists. */
@@ -150,14 +159,14 @@ export function canonicalPlayerSetups(players: DuoPlayers): PlayerSetup[] {
 
 /**
  * The playerSetups THIS device runs its local client with: its own seat is
- * the only "human"; bot seats run as real bots ONLY on the host device (so
- * exactly one phone drives them); everything else renders as "remote".
+ * the only "human"; bot seats run as real bots only on the human browser that won
+ * that bot turn's RTDB lock; everything else renders as "remote".
  */
-export function devicePlayerSetups(players: DuoPlayers, mySeat: DuoSeat): PlayerSetup[] {
+export function devicePlayerSetups(players: DuoPlayers, mySeat: DuoSeat, botDriverSeat?: DuoSeat | null): PlayerSetup[] {
   return roomSeats(players).map((s) => {
-    if (s === mySeat) return { mode: "human" as const };
     const slot = players[s];
-    if (isBotSlot(slot) && mySeat === HOST_SEAT) {
+    if (s === mySeat) return { mode: "human" as const };
+    if (isBotSlot(slot) && botDriverSeat === s) {
       return { mode: "bot" as const, botDifficulty: slot?.botDifficulty ?? "normal" };
     }
     return { mode: "remote" as const };
@@ -178,6 +187,7 @@ export function isDuoSeat(value: unknown): value is DuoSeat {
 }
 
 export type ProposalRejection =
+  | "bot-lock-mismatch"
   | "not-your-turn"
   | "stale-revision"
   | "bad-revision-step"
@@ -202,8 +212,14 @@ export function validateProposal(
   }
   const active = room.snapshot.ctx.currentPlayer;
   const activeIsBot = isBotSlot(room.players?.[active as DuoSeat]);
-  const allowed = active === proposal.seat || (activeIsBot && proposal.seat === HOST_SEAT);
-  if (!allowed) {
+  if (activeIsBot) {
+    const lock = (room as Pick<DuoRoom, "botTurnLock">).botTurnLock;
+    if (!lock || lock.playerId !== active || lock.claimedBy !== proposal.seat || lock.turnId !== turnId("", room.snapshot.ctx)) {
+      return { ok: false, reason: "bot-lock-mismatch" };
+    }
+    return { ok: true };
+  }
+  if (active !== proposal.seat) {
     return { ok: false, reason: "not-your-turn" };
   }
   return { ok: true };

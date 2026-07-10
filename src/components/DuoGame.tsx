@@ -23,7 +23,9 @@ import {
   type DuoSnapshot,
 } from "@/lib/duo/protocol";
 import {
+  claimBotTurn,
   claimTurnNotification,
+  clearBotTurnLock,
   fetchRoom,
   isPresent,
   publishSnapshot,
@@ -67,8 +69,8 @@ function playTurnChime(): void {
  * runs a local boardgame.io client rebuilt from the latest shared snapshot;
  * a move made HERE is published with a revision compare-and-swap (rejected
  * if out of turn or stale), and a snapshot arriving from ANOTHER phone
- * remounts the local client. Bot seats are driven by the HOST device only
- * (everyone else sees them as remote players). Refresh/reconnect just
+ * remounts the local client. Bot seats are driven by the connected human browser that wins the RTDB
+ * bot-turn lock (host tries first; another human can fall back). Refresh/reconnect just
  * re-reads the latest snapshot.
  */
 export default function DuoGame({ roomId, seat }: DuoGameProps) {
@@ -79,12 +81,14 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const [banner, setBanner] = useState<string | null>(null);
   const [pushState, setPushState] = useState<"off" | "on" | "busy">("off");
   const [pushError, setPushError] = useState<string | null>(null);
+  const [botDriverSeat, setBotDriverSeat] = useState<DuoSeat | null>(null);
 
   const appliedRevision = useRef(-1);
   const roomRef = useRef<DuoRoom | null>(null);
   const lastCtxRef = useRef<DuoSnapshot["ctx"] | null>(null);
   const publishChain = useRef<Promise<void>>(Promise.resolve());
   const lastBannerTurn = useRef("");
+  const botClaimRef = useRef("");
 
   // --- live room subscription + presence -----------------------------------
   useEffect(() => {
@@ -194,10 +198,9 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
   const DuoClient = useMemo(() => {
     if (!base) return null;
     const { G, ctx } = base.snapshot;
-    // This device drives ONLY its own seat (plus the bots, if it's the host);
-    // every other seat renders as remote. Seat types never change after the
-    // room is created, so reading them from the ref is safe here.
-    const setups = devicePlayerSetups(roomRef.current?.players ?? {}, seat);
+    // This device drives only its own human seat, plus a bot seat only after
+    // winning that bot turn's RTDB lock. Every other seat renders remote.
+    const setups = devicePlayerSetups(roomRef.current?.players ?? {}, seat, botDriverSeat);
     const localG: GameState = {
       ...G,
       playerSetups: setups.length === G.numPlayers ? setups : G.playerSetups,
@@ -214,7 +217,34 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
       debug: false,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, seat, onLocalState]);
+  }, [base, seat, botDriverSeat, onLocalState]);
+
+
+  // --- lock-arbitrated online bot driver -----------------------------------
+  useEffect(() => {
+    if (!base || !room) return;
+    const active = base.snapshot.ctx.currentPlayer as DuoSeat;
+    const activeSlot = room.players[active];
+    if (activeSlot?.type !== "bot") {
+      setBotDriverSeat(null);
+      return;
+    }
+    const mySlot = room.players[seat];
+    if (!mySlot?.joined || mySlot.type === "bot") return;
+    const key = `${base.snapshot.ctx.turn}:${active}:${seat}`;
+    if (botClaimRef.current === key || botDriverSeat === active) return;
+    const hostDelay = seat === "0" ? 650 : 1200;
+    const jitter = Math.floor(Math.random() * 550);
+    const timer = window.setTimeout(async () => {
+      botClaimRef.current = key;
+      const won = await claimBotTurn(roomId, active, seat);
+      if (won) {
+        setBotDriverSeat(active);
+        window.setTimeout(() => clearBotTurnLock(roomId, seat).catch(() => {}), 10_000);
+      }
+    }, hostDelay + jitter);
+    return () => window.clearTimeout(timer);
+  }, [base, room, roomId, seat, botDriverSeat]);
 
   // --- notifications toggle --------------------------------------------------
   async function togglePush() {
@@ -317,7 +347,7 @@ export default function DuoGame({ roomId, seat }: DuoGameProps) {
         </div>
       )}
 
-      <div className="pt-7">{DuoClient ? <DuoClient playerID={seat} /> : null}</div>
+      <div className="pt-7">{DuoClient ? <DuoClient key={`${base?.revision ?? 0}:${botDriverSeat ?? seat}`} playerID={botDriverSeat ?? seat} /> : null}</div>
     </div>
   );
 }

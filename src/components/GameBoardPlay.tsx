@@ -67,6 +67,17 @@ export interface GameBoardPlayProps extends BoardProps<GameState> {
    * still show "🤖 thinking" instead of the generic reserved-seat banner.
    */
   remoteBotSeats?: string[];
+  /**
+   * Duo-online: identifies the one specific roll (if any) the caller wants
+   * animated on THIS mount — "" or omitted means none. This component
+   * always remounts fresh when a synced snapshot arrives (see DuoGame), so
+   * without this signal a roll that's simply still on the board from an
+   * earlier action would replay its animation on every unrelated remount.
+   * Left undefined for local pass-and-play, which never has this problem
+   * (the client stays mounted for the whole game) and keeps its original
+   * "always animate a set G.lastRoll" behavior unchanged.
+   */
+  diceAnimKey?: string;
 }
 
 type ExtendedMoves = BoardProps<GameState>["moves"] & {
@@ -99,6 +110,7 @@ export default function GameBoardPlay({
   variant = "base",
   handoffGate = true,
   remoteBotSeats = [],
+  diceAnimKey,
 }: GameBoardPlayProps) {
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
@@ -110,6 +122,14 @@ export default function GameBoardPlay({
   const [cardToPlay, setCardToPlay] = useState<ProgressCardType | null>(null);
   // Whether the addressed human has passed the privacy curtain to review an offer.
   const [tradeReviewed, setTradeReviewed] = useState(false);
+
+  // Proof-of-fix logging: confirms this component (and the board beneath
+  // it) stays mounted across a duo-online sync tick instead of tearing
+  // down and rebuilding on every action.
+  useEffect(() => {
+    console.debug("[GameBoardPlay] mounted");
+    return () => console.debug("[GameBoardPlay] unmounted");
+  }, []);
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
@@ -189,11 +209,26 @@ export default function GameBoardPlay({
 
   useEffect(() => { setPrivacyGate(handoffGate && canControlCurrent); }, [handoffGate, canControlCurrent, current]);
 
+  // Captured once, at construction: what G.lastRoll already was the moment
+  // this instance was born. Distinguishes a LIVE transition (this device
+  // just rolled, or the client is still mounted from before — always show
+  // the animation) from being remounted already holding a roll that some
+  // earlier instance may already have animated (duo-online: every synced
+  // action remounts this whole component, so a roll that's simply still on
+  // the board from a prior action must not replay).
+  const rollAtMountRef = useRef(G.lastRoll);
   useEffect(() => {
     if (!G.lastRoll) return;
+    const bornWithThisRoll = rollAtMountRef.current === G.lastRoll;
+    if (bornWithThisRoll && diceAnimKey !== undefined && !diceAnimKey) {
+      console.debug("[GameBoardPlay] dice anim suppressed — already animated this roll", G.lastRoll);
+      return;
+    }
+    console.debug("[GameBoardPlay] dice anim firing", G.lastRoll, bornWithThisRoll ? "(remount, fresh roll)" : "(live roll)");
     setDiceFlash(G.lastRoll);
     const timer = window.setTimeout(() => setDiceFlash(null), 1200);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [G.lastRoll]);
 
   // A bot never taps "Continue", so auto-dismiss a lingering result banner
@@ -391,7 +426,10 @@ export default function GameBoardPlay({
               </div>
             )}
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
+              {/* No confirmation for dice — rolling isn't a choice to second-guess, and gating it
+                  behind a modal only added friction (and, in duo online, an extra tap before the
+                  remount/animation cycle). */}
+              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || G.hasRolled || !!gameover} onClick={() => moves.rollDice()} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
               <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
               <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
             </div>

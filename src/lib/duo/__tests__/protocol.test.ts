@@ -14,6 +14,7 @@ import {
   isNewerSnapshot,
   nextFreeHumanSeat,
   reviveSnapshot,
+  rollId,
   sanitizeSeatConfigs,
   serializeSnapshot,
   shouldNotifyTurn,
@@ -322,5 +323,24 @@ describe("reconnect / refresh snapshot round-trip", () => {
     const wire = serializeSnapshot(G, { currentPlayer: "0", phase: "play", turn: 1, playOrderPos: 0 });
     expect(wire.G._duoSkipTurnReset).toBeUndefined();
     expect(wire.G.playerSetups).toEqual([{ mode: "human" }, { mode: "human" }]);
+  });
+});
+
+describe("rollId (dice animation identity — fixes the duo remount replay bug)", () => {
+  it("is empty when there is no roll yet", () => {
+    expect(rollId(3, null)).toBe("");
+    expect(rollId(3, undefined)).toBe("");
+  });
+
+  it("is stable for the same turn + roll (so a later remount recognizes it as already shown)", () => {
+    expect(rollId(5, [3, 4])).toBe(rollId(5, [3, 4]));
+  });
+
+  it("differs across turns even with identical dice faces (a real new roll must always re-animate)", () => {
+    expect(rollId(5, [3, 4])).not.toBe(rollId(6, [3, 4]));
+  });
+
+  it("differs for different faces on the same turn", () => {
+    expect(rollId(5, [3, 4])).not.toBe(rollId(5, [4, 3]));
   });
 });

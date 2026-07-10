@@ -38,6 +38,15 @@ function webglAvailable(): boolean {
   }
 }
 
+// WebGL support never changes mid-session. Detecting it is cheap, but doing
+// it via useState+useEffect means every remount of BoardStage (e.g. duo
+// online, which remounts the whole board on each synced action) starts a
+// fresh render at mode="pending" and briefly shows the 2D fallback/blank
+// state before the effect flips it back to "3d" — the visible "black/loading
+// glitch". Caching the result at module scope makes every mount AFTER the
+// first start directly at the right mode, with zero flash.
+let cachedMode: "3d" | "2d" | null = null;
+
 /** Falls back to the 2D SVG board if the 3D canvas throws (lost context, etc.). */
 class BoardErrorBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -51,9 +60,18 @@ class BoardErrorBoundary extends Component<{ fallback: ReactNode; children: Reac
 
 export default function BoardStage(props: BoardStageProps) {
   // Decide 2D vs 3D only on the client, after mount, to stay export-safe.
-  const [mode, setMode] = useState<"pending" | "3d" | "2d">("pending");
+  // A cached result (see above) skips the "pending" flash on every remount.
+  const [mode, setMode] = useState<"pending" | "3d" | "2d">(() => cachedMode ?? "pending");
   useEffect(() => {
-    setMode(webglAvailable() ? "3d" : "2d");
+    if (cachedMode) {
+      console.debug("[BoardStage] mode from cache — no black/loading flash", cachedMode);
+      if (mode !== cachedMode) setMode(cachedMode);
+      return;
+    }
+    cachedMode = webglAvailable() ? "3d" : "2d";
+    console.debug("[BoardStage] mode detected (first time this session)", cachedMode);
+    setMode(cachedMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fallback = <HexBoardPlay {...props} />;

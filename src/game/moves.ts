@@ -610,7 +610,7 @@ function settleTrade(G: GameState, offer: import("@/types/game").TradeOffer): vo
  * otherwise it is parked in `G.pendingTrade` for a private human response.
  */
 export const proposeTrade: Move<GameState> = (
-  { G, playerID, random },
+  { G, playerID, random, events },
   targetPlayer: string,
   give: ResourceKey,
   giveAmount: number,
@@ -651,11 +651,18 @@ export const proposeTrade: Move<GameState> = (
 
   G.pendingTrade = offer;
   G.lastTradeResult = null;
+  // boardgame.io only lets ctx.currentPlayer dispatch moves by default — a
+  // client bound to any OTHER seat's playerID (every online device besides
+  // the proposer's) has its moves silently rejected before they even run.
+  // Marking both participants "active" is what lets the target's OWN client
+  // actually call respondTrade/cancelTrade below. Cleared back to null once
+  // the offer resolves, restoring normal current-player-only gating.
+  events.setActivePlayers([player, targetPlayer]);
   log(G, `${name(G, player)} proposed a trade to ${name(G, targetPlayer)}.`);
 };
 
 /** The target of a pending human trade accepts or refuses it. */
-export const respondTrade: Move<GameState> = ({ G, playerID }, accept: boolean) => {
+export const respondTrade: Move<GameState> = ({ G, playerID, events }, accept: boolean) => {
   ensureCkState(G);
   const offer = G.pendingTrade;
   if (!offer) return INVALID_MOVE;
@@ -676,15 +683,17 @@ export const respondTrade: Move<GameState> = ({ G, playerID }, accept: boolean) 
     accepted,
     reason: accept && !canPay ? "Resources changed — trade void." : undefined,
   };
+  events.setActivePlayers({});
   log(G, `${name(G, offer.to)} ${accepted ? "accepted" : "declined"} the trade.`);
 };
 
 /** Proposer cancels an outstanding offer. */
-export const cancelTrade: Move<GameState> = ({ G, playerID }) => {
+export const cancelTrade: Move<GameState> = ({ G, playerID, events }) => {
   ensureCkState(G);
   if (!G.pendingTrade) return INVALID_MOVE;
   if (playerID != null && G.pendingTrade.from !== playerID) return INVALID_MOVE;
   G.pendingTrade = null;
+  events.setActivePlayers({});
 };
 
 /** Dismiss the last trade result banner (both parties). */

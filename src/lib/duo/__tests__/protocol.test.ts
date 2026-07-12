@@ -98,6 +98,54 @@ describe("turn lock + optimistic concurrency (2-player sync)", () => {
   });
 });
 
+describe("trade-participant exception (responder must be able to publish accept/refuse)", () => {
+  it("lets the RESPONDER publish while the turn is still the proposer's", () => {
+    const room = makeRoomState("0", 4); // turn belongs to seat 0
+    room.snapshot.G.pendingTrade = { from: "0", to: "1", give: "wood", giveAmount: 1, receive: "ore", receiveAmount: 1 };
+    const proposal = { seat: "1", baseRevision: 4, snapshot: room.snapshot };
+    expect(validateProposal(room, proposal)).toEqual({ ok: true });
+  });
+
+  it("still lets the PROPOSER (already the active seat) publish their own cancel", () => {
+    const room = makeRoomState("0", 4);
+    room.snapshot.G.pendingTrade = { from: "0", to: "1", give: "wood", giveAmount: 1, receive: "ore", receiveAmount: 1 };
+    const proposal = { seat: "0", baseRevision: 4, snapshot: room.snapshot };
+    expect(validateProposal(room, proposal)).toEqual({ ok: true });
+  });
+
+  it("rejects a bystander seat that is neither trade participant nor active player", () => {
+    const players = {
+      "0": { name: "Moshe", joined: true, type: "human" },
+      "1": { name: "Leah", joined: true, type: "human" },
+      "2": { name: "Dana", joined: true, type: "human" },
+    };
+    const room = makeRoomState("0", 4, players);
+    room.snapshot.G.pendingTrade = { from: "0", to: "1", give: "wood", giveAmount: 1, receive: "ore", receiveAmount: 1 };
+    const proposal = { seat: "2", baseRevision: 4, snapshot: room.snapshot };
+    expect(validateProposal(room, proposal)).toEqual({ ok: false, reason: "not-your-turn" });
+  });
+
+  it("without a pending trade, a non-active seat is still rejected as before (no blanket bypass)", () => {
+    const room = makeRoomState("0", 4);
+    room.snapshot.G.pendingTrade = null;
+    const proposal = { seat: "1", baseRevision: 4, snapshot: room.snapshot };
+    expect(validateProposal(room, proposal)).toEqual({ ok: false, reason: "not-your-turn" });
+  });
+
+  it("a stale-revision proposal from a legitimate trade participant is still rejected — revision wins first", () => {
+    const room = makeRoomState("0", 5);
+    room.snapshot.G.pendingTrade = { from: "0", to: "1", give: "wood", giveAmount: 1, receive: "ore", receiveAmount: 1 };
+    const proposal = { seat: "1", baseRevision: 4, snapshot: room.snapshot };
+    expect(validateProposal(room, proposal)).toEqual({ ok: false, reason: "stale-revision" });
+  });
+
+  it("reconnect/replay: applying the SAME accepted-trade snapshot twice is a no-op via isNewerSnapshot, not a second publish", () => {
+    // The publish gate (validateProposal) only governs the write; a device
+    // that already applied revision 5 must not re-apply it on reconnect.
+    expect(isNewerSnapshot(5, 5)).toBe(false);
+  });
+});
+
 describe("push dedupe (lastNotifiedTurnId)", () => {
   const nextCtx = { turn: 8, currentPlayer: "1" };
 

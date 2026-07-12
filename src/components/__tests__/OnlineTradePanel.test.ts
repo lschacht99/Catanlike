@@ -60,6 +60,8 @@ describe("GameBoardPlay routes online vs local trade UI correctly", () => {
   });
 
   it("passes cancelTrade through for the online proposer's Cancel button", () => {
-    expect(source).toMatch(/onCancel=\{\(\) => boardMoves\.cancelTrade\?\.\(\)\}/);
+    // Wrapped in runTradeAction (busy/failed UX) rather than called bare —
+    // still the same cancelTrade move underneath.
+    expect(source).toMatch(/onCancel=\{\(\) => runTradeAction\(\(\) => boardMoves\.cancelTrade\?\.\(\)\)\}/);
   });
 });

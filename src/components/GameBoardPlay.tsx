@@ -37,7 +37,7 @@ import {
 import { victoryPoints } from "@/game/scoring";
 import { chooseBotAction } from "@/game/ai/turn";
 import { hasMerchantGuild, maritimeRate, playerHarborTypes } from "@/game/harbors";
-import { canResponderPay as canResponderPayFor, isTradeStale, onlineTradeRole } from "@/game/onlineTrade";
+import { canResponderPay as canResponderPayFor, isTradeStale, onlineTradeRole, resolveDisplayPlayerId } from "@/game/onlineTrade";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
@@ -135,8 +135,6 @@ export default function GameBoardPlay({
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
-  const resources = G.players[current].resources;
-  const pieces = pieceCounts(G, current);
   const gameover = ctx.gameover as { winner: string } | undefined;
   const playerSetups = normalizePlayerSetups(G.numPlayers, G.playerSetups, playerModes);
   const remoteBotSeatSet = useMemo(() => new Set(remoteBotSeats), [remoteBotSeats]);
@@ -152,7 +150,22 @@ export default function GameBoardPlay({
   const canControlCurrent = canLocalDeviceControlSeat(G, current);
   const boardMoves = moves as ExtendedMoves;
   const names = useMemo(() => G.playerNames ?? G.names ?? [], [G.playerNames, G.names]);
-  const player = G.players[current];
+
+  // Duo-online has exactly one human seat per device (handoffGate={false});
+  // local pass-and-play shares one device across every seat, where "which
+  // seat is mine" isn't a meaningful question, so this stays unused there.
+  const onlineMode = !handoffGate;
+  const mySeatId = useMemo(() => {
+    const idx = playerSetups.findIndex((s) => s.mode === "human");
+    return idx >= 0 ? String(idx) : "";
+  }, [playerSetups]);
+  // Whose HAND gets displayed on this screen — see resolveDisplayPlayerId.
+  // Board/move VALIDATION below stays keyed on `current` throughout
+  // (unchanged) — only the hand/cards shown at THIS screen can switch.
+  const displayPlayerId = resolveDisplayPlayerId(onlineMode, mySeatId, current);
+  const resources = G.players[displayPlayerId].resources;
+  const pieces = pieceCounts(G, displayPlayerId);
+  const player = G.players[displayPlayerId];
   const commodities = player.commodities ?? { paper: 0, coin: 0, cloth: 0 };
   const improvements = player.improvements ?? { trade: 0, politics: 0, science: 0 };
   const progressCards = player.progressCards ?? [];
@@ -164,14 +177,6 @@ export default function GameBoardPlay({
   const pendingTrade = G.pendingTrade ?? null;
   const tradeResult = G.lastTradeResult ?? null;
 
-  // Duo-online has exactly one human seat per device (handoffGate={false});
-  // local pass-and-play shares one device across every seat, where "which
-  // seat is mine" isn't a meaningful question, so this stays unused there.
-  const onlineMode = !handoffGate;
-  const mySeatId = useMemo(() => {
-    const idx = playerSetups.findIndex((s) => s.mode === "human");
-    return idx >= 0 ? String(idx) : "";
-  }, [playerSetups]);
   const myTradeRole = onlineMode ? onlineTradeRole(pendingTrade, mySeatId) : "bystander";
   const tradeStale = onlineMode && !!pendingTrade && isTradeStale(G, pendingTrade);
 
@@ -185,6 +190,34 @@ export default function GameBoardPlay({
     if (myTradeRole !== "proposer" && myTradeRole !== "responder") return;
     boardMoves.respondTrade?.(false);
   }, [tradeStale, myTradeRole, boardMoves]);
+
+  // Online trade action UX: disable Accept/Refuse/Cancel the instant they're
+  // tapped (guards a rapid double-tap racing ahead of the re-render that
+  // would otherwise disable them — respondTrade/cancelTrade are already
+  // idempotent at the engine level regardless, this is belt-and-suspenders),
+  // and surface a retry ONLY if the action still hasn't taken effect after a
+  // few seconds (a genuine failure — e.g. lost connection before the local
+  // move could even apply), never as a routine part of the flow.
+  const [tradeActionBusy, setTradeActionBusy] = useState(false);
+  const [tradeActionStuck, setTradeActionStuck] = useState(false);
+  const pendingTradeKey = pendingTrade
+    ? `${pendingTrade.from}:${pendingTrade.to}:${pendingTrade.give}:${pendingTrade.giveAmount}:${pendingTrade.receive}:${pendingTrade.receiveAmount}`
+    : "";
+  useEffect(() => {
+    // Resolved (or replaced by a new offer) — clear busy/stuck for the new state.
+    setTradeActionBusy(false);
+    setTradeActionStuck(false);
+  }, [pendingTradeKey]);
+  useEffect(() => {
+    if (!tradeActionBusy) return;
+    const timer = window.setTimeout(() => setTradeActionStuck(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [tradeActionBusy]);
+  function runTradeAction(run: () => void) {
+    setTradeActionBusy(true);
+    setTradeActionStuck(false);
+    run();
+  }
 
   // Public rival info for the trade panel — counts only, never the breakdown.
   const rivals: RivalInfo[] = Object.keys(G.players)
@@ -496,9 +529,11 @@ export default function GameBoardPlay({
             responderName={names[Number(pendingTrade.to)]}
             canResponderPay={canResponderPayFor(G, pendingTrade)}
             expired={tradeStale}
-            onAccept={() => boardMoves.respondTrade?.(true)}
-            onRefuse={() => boardMoves.respondTrade?.(false)}
-            onCancel={() => boardMoves.cancelTrade?.()}
+            busy={tradeActionBusy}
+            failed={tradeActionStuck}
+            onAccept={() => runTradeAction(() => boardMoves.respondTrade?.(true))}
+            onRefuse={() => runTradeAction(() => boardMoves.respondTrade?.(false))}
+            onCancel={() => runTradeAction(() => boardMoves.cancelTrade?.())}
           />
         )
       ) : (

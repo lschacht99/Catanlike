@@ -69,3 +69,17 @@ export function canResponderPay(G: Pick<GameState, "players">, offer: TradeOffer
   const toPlayer = G.players[offer.to];
   return !!toPlayer && toPlayer.resources[offer.receive] >= offer.receiveAmount;
 }
+
+/**
+ * Whose hand gets DISPLAYED on this screen. Local pass-and-play always shows
+ * the active player — the single shared device is physically handed over
+ * between turns, so that's correct and intentional. Online, the device
+ * never changes hands: showing the active player's resources whenever it
+ * ISN'T this seat's turn would leak their exact card counts to every other
+ * connected device. Board/move validation elsewhere stays keyed on the
+ * active player throughout (unchanged) — only which hand is RENDERED
+ * switches to the local device's own seat.
+ */
+export function resolveDisplayPlayerId(onlineMode: boolean, mySeatId: string, currentPlayer: string): string {
+  return onlineMode && mySeatId ? mySeatId : currentPlayer;
+}

@@ -216,9 +216,14 @@ export type ProposalRejection =
  * it comes from the seat whose turn it is IN THE CURRENT ROOM STATE — or
  * from any HUMAN seat when the active seat is a bot (the botTurnLock picks
  * which human actually runs it, host preferred; the revision CAS makes a
- * duplicate run lose anyway) — and is based on exactly the room's current
- * revision (a phone that raced or replayed an old tab loses cleanly and
- * just re-syncs).
+ * duplicate run lose anyway) — or from either PARTICIPANT of a trade that's
+ * currently pending (the target must be able to publish their own
+ * accept/refuse, and the proposer their own cancel, even though the turn
+ * itself never left the proposer — this mirrors the engine's own
+ * events.setActivePlayers([from, to]) in proposeTrade; a bystander seat
+ * matching neither side is still rejected) — and is based on exactly the
+ * room's current revision (a phone that raced or replayed an old tab loses
+ * cleanly and just re-syncs).
  */
 export function validateProposal(
   room: Pick<DuoRoom, "revision" | "snapshot" | "players">,
@@ -233,7 +238,9 @@ export function validateProposal(
   const active = room.snapshot.ctx.currentPlayer;
   const activeIsBot = isBotSlot(room.players?.[active as DuoSeat]);
   const proposerIsHuman = !isBotSlot(room.players?.[proposal.seat]);
-  const allowed = active === proposal.seat || (activeIsBot && proposerIsHuman);
+  const pendingTrade = room.snapshot.G?.pendingTrade;
+  const isTradeParticipant = !!pendingTrade && (proposal.seat === pendingTrade.from || proposal.seat === pendingTrade.to);
+  const allowed = active === proposal.seat || (activeIsBot && proposerIsHuman) || isTradeParticipant;
   if (!allowed) {
     return { ok: false, reason: "not-your-turn" };
   }

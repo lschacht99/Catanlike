@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canResponderPay, isTradeStale, onlineTradeRole, toOnlineTradeState } from "../onlineTrade";
+import { canResponderPay, isTradeStale, onlineTradeRole, resolveDisplayPlayerId, toOnlineTradeState } from "../onlineTrade";
 import { makeState } from "./helpers";
 import type { TradeOffer } from "@/types/game";
 
@@ -63,6 +63,22 @@ describe("canResponderPay", () => {
     const G = makeState(2);
     G.players["1"].resources.ore = 0;
     expect(canResponderPay(G, offer)).toBe(false);
+  });
+});
+
+describe("resolveDisplayPlayerId (private hands — each device shows only its own resources)", () => {
+  it("in local pass-and-play, always shows the active player's hand (device is physically handed over)", () => {
+    expect(resolveDisplayPlayerId(false, "", "1")).toBe("1");
+    expect(resolveDisplayPlayerId(false, "0", "1")).toBe("1"); // mySeatId ignored offline
+  });
+
+  it("online, shows THIS device's own seat regardless of whose turn it is", () => {
+    expect(resolveDisplayPlayerId(true, "1", "0")).toBe("1"); // not seat 0's turn — still shows seat 1's own hand
+    expect(resolveDisplayPlayerId(true, "0", "0")).toBe("0");
+  });
+
+  it("online with no resolved seat yet (mySeatId empty) falls back to current player rather than crashing", () => {
+    expect(resolveDisplayPlayerId(true, "", "0")).toBe("0");
   });
 });
 

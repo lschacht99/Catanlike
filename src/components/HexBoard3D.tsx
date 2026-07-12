@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Sky, MeshWobbleMaterial } from "@react-three/drei";
+import { OrbitControls, Sky } from "@react-three/drei";
 import * as THREE from "three";
 import type { Group, Object3D, Texture } from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
@@ -13,6 +13,7 @@ import { buildGeometry, HEX_SIZE } from "@/game/geometry";
 import { deriveHarbors } from "@/game/harbors";
 import { tokenTexture } from "./board3d/tokenTexture";
 import { harborTexture } from "./board3d/harborTexture";
+import { WaterSurface } from "./board3d/WaterSurface";
 
 /** Bundled tile art (or a theme's own image) resolved the same way HexBoardPlay
  *  resolves it: an absolute image URL wins, else the bundled SVG under the
@@ -239,8 +240,7 @@ const SCALE = 0.1;
 const HEX_R = HEX_SIZE * SCALE; // 1.0
 const SEA_Y = 0.02;
 
-/** Ocean + shore palette (an actual sea, not a beige disc). */
-const SEA_COLOR = "#1f6f95";
+/** Shore palette (an actual sea, not a beige disc) — sea color lives in board3d/waterShader.ts. */
 const SAND_COLOR = "#d8c69b";
 const SUN: [number, number, number] = [7, 8, 5];
 
@@ -454,17 +454,8 @@ export default function HexBoard3D({
           target={[0, 0, 0]}
         />
 
-        {/* Animated open sea — a wobbling plane on the GPU (cheap on mobile). */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SEA_Y - 0.06, 0]} receiveShadow>
-          <planeGeometry args={[60, 60, 48, 48]} />
-          <MeshWobbleMaterial
-            factor={0.16}
-            speed={0.9}
-            color={SEA_COLOR}
-            roughness={0.35}
-            metalness={0.15}
-          />
-        </mesh>
+        {/* Animated open sea — layered swell + ripples on the GPU shader, see board3d/waterShader.ts. */}
+        <WaterSurface y={SEA_Y - 0.06} />
 
         {/* Sandy island base so the hexes read as land, not floating discs. */}
         <mesh position={[0, -0.14, 0]} receiveShadow castShadow>

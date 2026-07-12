@@ -19,7 +19,13 @@ import { INVALID_MOVE } from "boardgame.io/core";
 
 /** Minimal boardgame.io move context wrapper. */
 function ctx(G: any, playerID: string, extra: any = {}) {
-  return { G, playerID, random: { Number: () => 0.5, D6: () => 3 }, events: {}, ...extra };
+  return {
+    G,
+    playerID,
+    random: { Number: () => 0.5, D6: () => 3 },
+    events: { setActivePlayers: () => {}, endTurn: () => {} },
+    ...extra,
+  };
 }
 
 /** boardgame.io Move is a non-callable union to tsc; invoke via any. */

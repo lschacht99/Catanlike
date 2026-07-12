@@ -23,6 +23,8 @@ export default function OnlineTradePanel({
   responderName,
   canResponderPay,
   expired,
+  busy = false,
+  failed = false,
   onAccept,
   onRefuse,
   onCancel,
@@ -34,6 +36,10 @@ export default function OnlineTradePanel({
   responderName: string;
   canResponderPay: boolean;
   expired: boolean;
+  /** An accept/refuse/cancel tap is in flight — buttons disable immediately. */
+  busy?: boolean;
+  /** It's been stuck in-flight too long — a genuine failure, offer to retry. */
+  failed?: boolean;
   onAccept: () => void;
   onRefuse: () => void;
   onCancel: () => void;
@@ -62,8 +68,17 @@ export default function OnlineTradePanel({
               {receiveStyle.label}.
             </p>
             <p className="mt-1 text-xs text-white/45">Keep playing — you can build, roll, or trade with the bank while you wait.</p>
-            <button onClick={onCancel} className="mt-3 w-full rounded-xl bg-white/10 py-3 text-sm font-bold text-white">
-              Cancel offer
+            {failed && (
+              <p className="mt-2 rounded-xl bg-red-500/15 px-3 py-2 text-xs text-red-300">
+                That&rsquo;s taking longer than expected — check your connection and try again.
+              </p>
+            )}
+            <button
+              onClick={onCancel}
+              disabled={busy && !failed}
+              className="mt-3 w-full rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-40"
+            >
+              {busy && !failed ? "Cancelling…" : failed ? "Retry cancel" : "Cancel offer"}
             </button>
           </div>
         ) : (
@@ -88,16 +103,25 @@ export default function OnlineTradePanel({
                 You don&rsquo;t have {offer.receiveAmount} {receiveStyle.label.toLowerCase()} to give.
               </p>
             )}
+            {failed && (
+              <p className="mt-2 rounded-xl bg-red-500/15 px-3 py-2 text-xs text-red-300">
+                That&rsquo;s taking longer than expected — check your connection and try again.
+              </p>
+            )}
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={onRefuse} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white">
-                Refuse
+              <button
+                onClick={onRefuse}
+                disabled={busy && !failed}
+                className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-40"
+              >
+                {busy && !failed ? "…" : failed ? "Retry refuse" : "Refuse"}
               </button>
               <button
                 onClick={onAccept}
-                disabled={!canResponderPay}
+                disabled={!canResponderPay || (busy && !failed)}
                 className="rounded-xl bg-emerald-500 py-3 text-sm font-black text-slate-900 disabled:opacity-40"
               >
-                Accept
+                {busy && !failed ? "…" : failed ? "Retry accept" : "Accept"}
               </button>
             </div>
           </div>

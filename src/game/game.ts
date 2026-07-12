@@ -1,4 +1,4 @@
-import type { Game } from "boardgame.io";
+import type { FnContext, Game } from "boardgame.io";
 import type { Board, GameState, GameVariant, OnlineSetupData, PlayerSetup } from "@/types/game";
 import {
   devDeck,
@@ -68,7 +68,20 @@ const PLAY_MOVES = {
   endTurn,
 } as const;
 
-const RESET_TURN = ({ G }: { G: GameState }) => {
+const RESET_TURN = ({ G, events }: FnContext<GameState>) => {
+  // Duo-online: each device rebuilds a brand-new boardgame.io client from
+  // the latest synced snapshot on every action (see DuoGame.tsx), and the
+  // hand-rolled Firebase wire protocol only carries {currentPlayer, phase,
+  // turn, playOrderPos} — NOT ctx.activePlayers (boardgame.io's own
+  // multiplayer transport would sync that automatically; this one doesn't).
+  // So a fresh mount always starts with activePlayers=null regardless of
+  // what proposeTrade set on the originating device. Re-derive it here,
+  // every time this phase begins (which fires once immediately even for a
+  // mid-turn resume) — otherwise a pending trade's target can never
+  // dispatch respondTrade from their own remounted client.
+  if (G.pendingTrade) {
+    events.setActivePlayers([G.pendingTrade.from, G.pendingTrade.to]);
+  }
   // Duo-online resume: a snapshot can land MID-turn (the opponent rolled and
   // built, then synced). The first synthetic "turn begin" after rebuilding a
   // client from such a snapshot must not wipe hasRolled/lastRoll — the guard

@@ -1,0 +1,33 @@
+name: Apply asset integration
+
+on:
+  push:
+    branches:
+      - codex/hamsa-asset-system
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/hamsa-asset-system
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/apply-asset-integration.mjs
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No patch required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/GameBoardPlay.tsx src/game/constants.ts src/game/moves.ts
+          git commit -m "Integrate knight visual state and Mighty rank rules"
+          git push

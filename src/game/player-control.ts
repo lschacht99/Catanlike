@@ -20,11 +20,12 @@ export function normalizePlayerSetups(numPlayers: number, setups?: PlayerSetup[]
   return Array.from({ length: numPlayers }, (_, index) => {
     const existing = setups?.[index];
     const mode = existing?.mode ?? modes?.[index] ?? "human";
-    return {
-      mode,
-      botDifficulty: mode === "bot" ? existing?.botDifficulty ?? "normal" : undefined,
-      joinCode: mode === "remote" ? existing?.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
-    };
+    // Only bots carry a difficulty and only remote seats carry a join code —
+    // never as explicit `undefined` keys, which Firebase RTDB rejects outright.
+    const setup: PlayerSetup = { mode };
+    if (mode === "bot") setup.botDifficulty = existing?.botDifficulty ?? "normal";
+    if (mode === "remote") setup.joinCode = existing?.joinCode ?? joinCodeForSeat("LOCAL", index);
+    return setup;
   });
 }
 

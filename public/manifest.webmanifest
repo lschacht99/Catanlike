@@ -1,18 +1,18 @@
 {
-  "name": "Hamsa Nomads",
-  "short_name": "Hamsa",
-  "description": "Build · Trade · Explore — a themeable hex-board trading game.",
-  "start_url": "/",
+  "name": "Hamsa Catan",
+  "short_name": "Hamsa Catan",
+  "description": "Build · Trade · Explore — a mobile-first hex-board trading game.",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f2ead9",
-  "theme_color": "#f2ead9",
+  "theme_color": "#1e3a5f",
+  "background_color": "#faf5e9",
   "icons": [
-    {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

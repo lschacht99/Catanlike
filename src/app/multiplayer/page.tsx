@@ -66,6 +66,15 @@ export default function MultiplayerPage() {
 
       <div className="mt-6 space-y-3">
         <SectionLabel>Play online</SectionLabel>
+        <Link href="/duo" className="block">
+          <Card className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-black text-ink">Easy Online · 2–4 players 💑</p>
+              <p className="text-xs text-ink-soft">Room code + QR, any network, humans + bots, turn notifications. No accounts.</p>
+            </div>
+            <span className="text-rust">▸</span>
+          </Card>
+        </Link>
         {ONLINE_ENABLED ? (
           <div className="grid grid-cols-2 gap-3">
             <Link href="/online/create" className="rounded-2xl border border-line bg-cream p-4 text-center shadow-card active:scale-[0.98]">

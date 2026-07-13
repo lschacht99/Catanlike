@@ -3,7 +3,7 @@
 export const RESOURCE_KEYS = ["wood", "brick", "grain", "wool", "ore"] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
 
-export const COMMODITY_KEYS = ["coin", "cloth", "book"] as const;
+export const COMMODITY_KEYS = ["paper", "coin", "cloth"] as const;
 export type CommodityKey = (typeof COMMODITY_KEYS)[number];
 export type CommodityCounts = Record<CommodityKey, number>;
 
@@ -12,9 +12,12 @@ export type ProgressTrackKey = (typeof PROGRESS_TRACK_KEYS)[number];
 export type ProgressTrackCounts = Record<ProgressTrackKey, number>;
 
 export type ProgressCardType =
-  | "roadworks" | "bridgeCrew" | "trailSurvey" | "harvest" | "irrigation" | "oreRush"
-  | "merchant" | "marketDay" | "caravan" | "harborDeal" | "storehouse" | "guildFavor"
-  | "diplomat" | "watchPatrol" | "borderPost" | "invention" | "scribe" | "engineer";
+  // trade
+  | "harvest" | "merchant" | "caravan" | "marketDay"
+  // politics
+  | "diplomat" | "warlord" | "intrigue" | "levy"
+  // science
+  | "roadworks" | "invention" | "oreRush" | "scholar";
 
 /** What a tile can produce ("desert" produces nothing). */
 export type TileResource = ResourceKey | "desert";
@@ -169,6 +172,8 @@ export interface GameState {
   difficulties?: Difficulty[];
   /** Human-readable event feed (most recent last). */
   log: string[];
+  /** Duo-online: skip the next turn-begin reset (set when resuming mid-turn). */
+  _duoSkipTurnReset?: boolean;
 }
 
 /** A proposed player-to-player exchange. Amounts only — never hands. */

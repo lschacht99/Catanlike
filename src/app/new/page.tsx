@@ -27,7 +27,7 @@ function NewGamePageInner() {
   const router = useRouter();
   const search = useSearchParams();
   const [numPlayers, setNumPlayers] = useState(3);
-  const [themeId, setThemeId] = useState("classic");
+  const [themeId, setThemeId] = useState("hamsa");
   const [themes, setThemes] = useState<Theme[]>([]);
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   const [board, setBoard] = useState<Board | null>(null);
@@ -43,7 +43,6 @@ function NewGamePageInner() {
   useEffect(() => {
     setThemes(allThemes());
     setBoard(generateBoard());
-    setSaveExists(hasSavedGame());
   }, []);
 
   function pickPlayers(n: number) {
@@ -76,22 +75,21 @@ function NewGamePageInner() {
 
   function start() {
     if (!board) return;
-    // Pass-and-play: every seat is a human sharing this device.
-    const playerModes: PlayerMode[] = Array.from({ length: numPlayers }, () => "human");
+    // Each seat carries its own mode (human on this device, remote human, or
+    // bot with a difficulty); pass-and-play privacy screens hide human hands.
+    const seats = playerSetups.slice(0, numPlayers).map((setup, index) => ({
+      mode: setup.mode,
+      botDifficulty: setup.mode === "bot" ? setup.botDifficulty ?? "normal" : undefined,
+      joinCode: setup.mode === "remote" ? setup.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
+    }));
     saveGameConfig({
       numPlayers,
       themeId,
       board,
       variant,
-      playerModes,
       playerNames: names.slice(0, numPlayers).map((n, i) => n.trim() || DEFAULT_NAMES[i]),
-      playerModes: playerSetups.slice(0, numPlayers).map((setup) => setup.mode),
-      playerSetups: playerSetups.slice(0, numPlayers).map((setup, index) => ({
-        mode: setup.mode,
-        botDifficulty: setup.mode === "bot" ? setup.botDifficulty ?? "normal" : undefined,
-        joinCode: setup.mode === "remote" ? setup.joinCode ?? joinCodeForSeat("LOCAL", index) : undefined,
-      })),
-      variant,
+      playerModes: seats.map((setup) => setup.mode),
+      playerSetups: seats,
     });
     router.push("/game");
   }
@@ -112,53 +110,60 @@ function NewGamePageInner() {
           ))}
         </div>
         <div className="mt-3 space-y-2">
-          {Array.from({ length: numPlayers }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span
-                className="h-4 w-4 shrink-0 rounded-full border border-ink/20"
-                style={{ background: PLAYER_COLORS[i] }}
-              />
-              <input
-                value={names[i]}
-                onChange={(e) => {
-                  const next = [...names];
-                  next[i] = e.target.value;
-                  setNames(next);
-                }}
-                placeholder={DEFAULT_NAMES[i]}
-                className="w-full rounded-xl border border-line bg-parchment px-3 py-2 text-sm text-ink outline-none focus:border-ink/40"
-              />
-              <select
-                value={playerSetups[i]?.mode ?? "human"}
-                onChange={(e) => setMode(i, e.target.value as PlayerMode)}
-                aria-label={`Seat ${i + 1} player type`}
-                className="rounded-xl border border-line bg-parchment px-2 py-2 text-xs text-ink outline-none"
-              >
-                <option value="human">Human on this device / pass-and-play</option>
-                <option value="remote">Remote human</option>
-                <option value="bot">Bot</option>
-              </select>
-              <div className="col-span-3 ml-6 rounded-xl border border-line bg-parchment/60 px-3 py-2 text-xs text-ink-soft">
-                <b className="text-ink">{PLAYER_MODE_LABELS[playerSetups[i]?.mode ?? "human"]}</b>
-                {playerSetups[i]?.mode === "bot" && (
-                  <label className="mt-2 flex items-center justify-between gap-2">
-                    Difficulty
-                    <select
-                      value={playerSetups[i]?.botDifficulty ?? "normal"}
-                      onChange={(e) => setDifficulty(i, e.target.value as BotDifficulty)}
-                      aria-label={`Seat ${i + 1} bot difficulty`}
-                      className="rounded-lg border border-line bg-parchment px-2 py-1 text-xs text-ink outline-none"
-                    >
-                      {Object.entries(BOT_DIFFICULTY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
-                  </label>
-                )}
-                {playerSetups[i]?.mode === "remote" && (
-                  <p className="mt-1 font-semibold text-ink">Join code reserved: {playerSetups[i]?.joinCode ?? joinCodeForSeat("LOCAL", i)}</p>
-                )}
+          {Array.from({ length: numPlayers }).map((_, i) => {
+            const mode = playerSetups[i]?.mode ?? "human";
+            return (
+              <div key={i} className="rounded-xl border border-line bg-parchment/40 p-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full border border-ink/20"
+                    style={{ background: PLAYER_COLORS[i] }}
+                  />
+                  <input
+                    value={names[i]}
+                    onChange={(e) => {
+                      const next = [...names];
+                      next[i] = e.target.value;
+                      setNames(next);
+                    }}
+                    placeholder={DEFAULT_NAMES[i]}
+                    className="min-w-0 flex-1 rounded-xl border border-line bg-parchment px-3 py-2 text-sm text-ink outline-none focus:border-ink/40"
+                  />
+                  <select
+                    value={mode}
+                    onChange={(e) => setMode(i, e.target.value as PlayerMode)}
+                    aria-label={`Seat ${i + 1} player type`}
+                    className="w-24 shrink-0 rounded-xl border border-line bg-parchment px-2 py-2 text-xs text-ink outline-none sm:w-28"
+                  >
+                    <option value="human">Human</option>
+                    <option value="remote">Remote</option>
+                    <option value="bot">Bot</option>
+                  </select>
+                </div>
+                <div className="mt-2 rounded-lg border border-line bg-parchment/60 px-3 py-2 text-xs text-ink-soft">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <b className="text-ink">{PLAYER_MODE_LABELS[mode]}</b>
+                    {mode === "bot" && (
+                      <label className="flex items-center gap-2">
+                        Difficulty
+                        <select
+                          value={playerSetups[i]?.botDifficulty ?? "normal"}
+                          onChange={(e) => setDifficulty(i, e.target.value as BotDifficulty)}
+                          aria-label={`Seat ${i + 1} bot difficulty`}
+                          className="rounded-lg border border-line bg-parchment px-2 py-1 text-xs text-ink outline-none"
+                        >
+                          {Object.entries(BOT_DIFFICULTY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  {mode === "remote" && (
+                    <p className="mt-1 font-semibold text-ink">Join code reserved: {playerSetups[i]?.joinCode ?? joinCodeForSeat("LOCAL", i)}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 

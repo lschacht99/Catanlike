@@ -15,10 +15,11 @@ import type {
 import type { Theme } from "@/types/theme";
 import {
   CITIES_KNIGHTS_POINTS_TO_WIN,
+  COMMODITY_ICONS,
   COMMODITY_KEYS_ORDERED,
+  COMMODITY_LABELS,
   PLAYER_COLORS,
   PROGRESS_CARD_LABELS,
-  TOKEN_PIPS,
   totalResources,
   TRACK_COMMODITY,
   TRACK_KEYS_ORDERED,
@@ -26,8 +27,6 @@ import {
   type BuildableKind,
 } from "@/game/constants";
 import {
-  canAfford,
-  getGeometry,
   pieceCounts,
   validBanditTiles,
   validCitySpots,
@@ -36,22 +35,51 @@ import {
   validSettlementSpots,
 } from "@/game/rules";
 import { victoryPoints } from "@/game/scoring";
-import { evaluateBotTrade } from "@/game/trade-ai";
+import { chooseBotAction } from "@/game/ai/turn";
+import { hasMerchantGuild, maritimeRate, playerHarborTypes } from "@/game/harbors";
+import { canResponderPay as canResponderPayFor, isTradeStale, onlineTradeRole, resolveDisplayPlayerId } from "@/game/onlineTrade";
 import { loadGameConfig } from "@/lib/storage";
 import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizePlayerSetups } from "@/game/player-control";
 import { saveSnapshot } from "@/lib/save-game";
-import HexBoardPlay from "./HexBoardPlay";
+import { saveGame } from "@/lib/savegame";
+import BoardStage from "./BoardStage";
+import DiceRoll from "./DiceRoll";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
 import TradePanel, { type RivalInfo } from "./TradePanel";
 import PrivacyOverlay from "./PrivacyOverlay";
 import { TradeReview, TradeResultBanner } from "./TradeReview";
+import OnlineTradePanel from "./OnlineTradePanel";
 import ProgressCardPlay, { cardNeedsChoice } from "./ProgressCardPlay";
 
 export interface GameBoardPlayProps extends BoardProps<GameState> {
   theme: Theme;
   playerModes?: PlayerMode[];
   variant?: GameVariant;
+  /**
+   * Pass-and-play privacy curtain between local human turns. Defaults on;
+   * duo-online turns it off — each phone has exactly one local human, so
+   * there is nobody to hide the hand from.
+   */
+  handoffGate?: boolean;
+  /**
+   * Seat ids that are bots in a duo-online room. There, EVERY non-local
+   * seat is passed as playerModes="remote" (a bot can't be driven by an
+   * on-screen client bound to another seat's playerID) — this lets the UI
+   * still show "🤖 thinking" instead of the generic reserved-seat banner.
+   */
+  remoteBotSeats?: string[];
+  /**
+   * Duo-online: identifies the one specific roll (if any) the caller wants
+   * animated on THIS mount — "" or omitted means none. This component
+   * always remounts fresh when a synced snapshot arrives (see DuoGame), so
+   * without this signal a roll that's simply still on the board from an
+   * earlier action would replay its animation on every unrelated remount.
+   * Left undefined for local pass-and-play, which never has this problem
+   * (the client stays mounted for the whole game) and keeps its original
+   * "always animate a set G.lastRoll" behavior unchanged.
+   */
+  diceAnimKey?: string;
 }
 
 type ExtendedMoves = BoardProps<GameState>["moves"] & {
@@ -82,27 +110,63 @@ export default function GameBoardPlay({
   theme,
   playerModes = [],
   variant = "base",
+  handoffGate = true,
+  remoteBotSeats = [],
+  diceAnimKey,
 }: GameBoardPlayProps) {
   const [buildMode, setBuildMode] = useState<BuildableKind | null>(null);
   const [showTrade, setShowTrade] = useState(false);
   const [diceFlash, setDiceFlash] = useState<[number, number] | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [privacyGate, setPrivacyGate] = useState(true);
+  const [privacyGate, setPrivacyGate] = useState(handoffGate);
   const [tradeNotice, setTradeNotice] = useState<string | null>(null);
+  // A progress card awaiting its interactive choice (resources/commodities/target).
+  const [cardToPlay, setCardToPlay] = useState<ProgressCardType | null>(null);
+  // Whether the addressed human has passed the privacy curtain to review an offer.
+  const [tradeReviewed, setTradeReviewed] = useState(false);
+
+  // Proof-of-fix logging: confirms this component (and the board beneath
+  // it) stays mounted across a duo-online sync tick instead of tearing
+  // down and rebuilding on every action.
+  useEffect(() => {
+    console.debug("[GameBoardPlay] mounted");
+    return () => console.debug("[GameBoardPlay] unmounted");
+  }, []);
 
   const current = ctx.currentPlayer;
   const inSetup = ctx.phase === "setup";
-  const resources = G.players[current].resources;
-  const pieces = pieceCounts(G, current);
   const gameover = ctx.gameover as { winner: string } | undefined;
   const playerSetups = normalizePlayerSetups(G.numPlayers, G.playerSetups, playerModes);
+  const remoteBotSeatSet = useMemo(() => new Set(remoteBotSeats), [remoteBotSeats]);
+  // Local-loop CPU (pass-and-play) only — an online bot seat is deliberately
+  // NOT included here: it must stay "remote" so this on-screen client (bound
+  // to its own playerID) never tries to dispatch moves for another seat.
   const currentIsCpu = isBotSeat(G, current);
   const currentIsRemote = playerSetups[Number(current)]?.mode === "remote";
+  // Label-only: an online bot seat renders as "remote" above (so taps stay
+  // blocked and the auto-play effect stays off), but the UI should still
+  // read "🤖 thinking" instead of the generic reserved-seat banner.
+  const currentIsRemoteBot = currentIsRemote && remoteBotSeatSet.has(current);
   const canControlCurrent = canLocalDeviceControlSeat(G, current);
   const boardMoves = moves as ExtendedMoves;
   const names = useMemo(() => G.playerNames ?? G.names ?? [], [G.playerNames, G.names]);
-  const player = G.players[current];
-  const commodities = player.commodities ?? { coin: 0, cloth: 0, book: 0 };
+
+  // Duo-online has exactly one human seat per device (handoffGate={false});
+  // local pass-and-play shares one device across every seat, where "which
+  // seat is mine" isn't a meaningful question, so this stays unused there.
+  const onlineMode = !handoffGate;
+  const mySeatId = useMemo(() => {
+    const idx = playerSetups.findIndex((s) => s.mode === "human");
+    return idx >= 0 ? String(idx) : "";
+  }, [playerSetups]);
+  // Whose HAND gets displayed on this screen — see resolveDisplayPlayerId.
+  // Board/move VALIDATION below stays keyed on `current` throughout
+  // (unchanged) — only the hand/cards shown at THIS screen can switch.
+  const displayPlayerId = resolveDisplayPlayerId(onlineMode, mySeatId, current);
+  const resources = G.players[displayPlayerId].resources;
+  const pieces = pieceCounts(G, displayPlayerId);
+  const player = G.players[displayPlayerId];
+  const commodities = player.commodities ?? { paper: 0, coin: 0, cloth: 0 };
   const improvements = player.improvements ?? { trade: 0, politics: 0, science: 0 };
   const progressCards = player.progressCards ?? [];
   const activeKnights = G.activeKnights ?? {};
@@ -110,18 +174,50 @@ export default function GameBoardPlay({
   const ownInactiveKnight = Object.entries(G.knights ?? {}).find(([id, owner]) => owner === current && !activeKnights[id])?.[0];
   const hasCity = Object.values(G.buildings).some((b) => b.player === current && b.city);
 
-  const humanCount = Object.keys(G.players).filter((id) => playerModes[Number(id)] !== "bot").length;
   const pendingTrade = G.pendingTrade ?? null;
   const tradeResult = G.lastTradeResult ?? null;
-  // Show the "pass the device" curtain when control moves to a different human
-  // in a 2+ human game (and there is no trade flow in progress).
-  const needsHandoff =
-    humanCount >= 2 &&
-    !gameover &&
-    !currentIsCpu &&
-    !pendingTrade &&
-    !(tradeResult && !tradeResult.respondedByBot) &&
-    ackPlayer !== current;
+
+  const myTradeRole = onlineMode ? onlineTradeRole(pendingTrade, mySeatId) : "bystander";
+  const tradeStale = onlineMode && !!pendingTrade && isTradeStale(G, pendingTrade);
+
+  // Safe recovery: if the offer's own giver can no longer honor it (or it
+  // somehow references a player that doesn't exist), clear it instead of
+  // leaving either device stuck. Only the two participants may legally
+  // answer (respondTrade enforces this) — whichever device notices first
+  // does it; the CAS on the room's revision makes a duplicate a no-op.
+  useEffect(() => {
+    if (!tradeStale) return;
+    if (myTradeRole !== "proposer" && myTradeRole !== "responder") return;
+    boardMoves.respondTrade?.(false);
+  }, [tradeStale, myTradeRole, boardMoves]);
+
+  // Online trade action UX: disable Accept/Refuse/Cancel the instant they're
+  // tapped (guards a rapid double-tap racing ahead of the re-render that
+  // would otherwise disable them — respondTrade/cancelTrade are already
+  // idempotent at the engine level regardless, this is belt-and-suspenders),
+  // and surface a retry ONLY if the action still hasn't taken effect after a
+  // few seconds (a genuine failure — e.g. lost connection before the local
+  // move could even apply), never as a routine part of the flow.
+  const [tradeActionBusy, setTradeActionBusy] = useState(false);
+  const [tradeActionStuck, setTradeActionStuck] = useState(false);
+  const pendingTradeKey = pendingTrade
+    ? `${pendingTrade.from}:${pendingTrade.to}:${pendingTrade.give}:${pendingTrade.giveAmount}:${pendingTrade.receive}:${pendingTrade.receiveAmount}`
+    : "";
+  useEffect(() => {
+    // Resolved (or replaced by a new offer) — clear busy/stuck for the new state.
+    setTradeActionBusy(false);
+    setTradeActionStuck(false);
+  }, [pendingTradeKey]);
+  useEffect(() => {
+    if (!tradeActionBusy) return;
+    const timer = window.setTimeout(() => setTradeActionStuck(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [tradeActionBusy]);
+  function runTradeAction(run: () => void) {
+    setTradeActionBusy(true);
+    setTradeActionStuck(false);
+    run();
+  }
 
   // Public rival info for the trade panel — counts only, never the breakdown.
   const rivals: RivalInfo[] = Object.keys(G.players)
@@ -129,13 +225,15 @@ export default function GameBoardPlay({
     .map((id) => ({
       id,
       name: names[Number(id)],
-      isBot: playerModes[Number(id)] === "bot",
+      isBot: playerModes[Number(id)] === "bot" || remoteBotSeatSet.has(id),
       cardCount: totalResources(G.players[id].resources),
     }));
 
   // Autosave at each clean turn start (before rolling) so Resume restarts the
   // active player's turn without replaying production.
   const lastSaved = useRef<string>("");
+  // Guards the once-per-turn bot trade proposal (keyed by ctx.turn).
+  const botProposeRef = useRef<number>(-1);
   useEffect(() => {
     if (inSetup || gameover || G.hasRolled || G.mustMoveBandit || pendingTrade) return;
     const key = `${ctx.turn}:${current}`;
@@ -166,13 +264,28 @@ export default function GameBoardPlay({
     if (config) saveSnapshot({ config, state: { G, ctx: { currentPlayer: ctx.currentPlayer, phase: ctx.phase, turn: ctx.turn, playOrder: ctx.playOrder, playOrderPos: ctx.playOrderPos } } });
   }, [G, ctx.currentPlayer, ctx.phase, ctx.turn, ctx.playOrder, ctx.playOrderPos]);
 
-  useEffect(() => { setPrivacyGate(canControlCurrent); }, [canControlCurrent, current]);
+  useEffect(() => { setPrivacyGate(handoffGate && canControlCurrent); }, [handoffGate, canControlCurrent, current]);
 
+  // Captured once, at construction: what G.lastRoll already was the moment
+  // this instance was born. Distinguishes a LIVE transition (this device
+  // just rolled, or the client is still mounted from before — always show
+  // the animation) from being remounted already holding a roll that some
+  // earlier instance may already have animated (duo-online: every synced
+  // action remounts this whole component, so a roll that's simply still on
+  // the board from a prior action must not replay).
+  const rollAtMountRef = useRef(G.lastRoll);
   useEffect(() => {
     if (!G.lastRoll) return;
+    const bornWithThisRoll = rollAtMountRef.current === G.lastRoll;
+    if (bornWithThisRoll && diceAnimKey !== undefined && !diceAnimKey) {
+      console.debug("[GameBoardPlay] dice anim suppressed — already animated this roll", G.lastRoll);
+      return;
+    }
+    console.debug("[GameBoardPlay] dice anim firing", G.lastRoll, bornWithThisRoll ? "(remount, fresh roll)" : "(live roll)");
     setDiceFlash(G.lastRoll);
     const timer = window.setTimeout(() => setDiceFlash(null), 1200);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [G.lastRoll]);
 
   // A bot never taps "Continue", so auto-dismiss a lingering result banner
@@ -189,7 +302,7 @@ export default function GameBoardPlay({
   let instruction = "";
 
   if (gameover) instruction = "";
-  else if (currentIsCpu) instruction = `${names[Number(current)]} is thinking…`;
+  else if (currentIsCpu || currentIsRemoteBot) instruction = `${names[Number(current)]} is thinking…`;
   else if (inSetup) {
     if (G.pendingSetupSettlement === null) {
       highlightVertices = validSettlementSpots(G, current, true);
@@ -228,73 +341,18 @@ export default function GameBoardPlay({
     // While a bot's own trade offer is awaiting a human answer, wait.
     if (G.pendingTrade) return;
     const timer = window.setTimeout(() => {
-      if (ctx.phase === "setup") {
-        if (G.pendingSetupSettlement === null) {
-          const spot = pickBestSettlement(G, validSettlementSpots(G, current, true));
-          if (spot) moves.placeSettlement(spot);
-        } else {
-          const road = pickBestRoad(G, current, validRoadSpots(G, current, true));
-          if (road) moves.placeRoad(road);
-        }
-        return;
-      }
-      if (!G.hasRolled) {
-        moves.rollDice();
-        return;
-      }
-      if (G.mustMoveBandit) {
-        const tile = pickBestBanditTile(G, current, validBanditTiles(G));
-        if (tile !== null) moves.moveBandit(tile);
-        return;
-      }
-      // Once per turn, a bot may offer a trade to a human rival.
-      if (botProposeRef.current !== ctx.turn) {
-        botProposeRef.current = ctx.turn;
-        const offer = botProposeTrade(G, current, Math.random);
-        if (offer && boardMoves.proposeTrade) {
-          boardMoves.proposeTrade(offer.to, offer.give, offer.giveAmount, offer.receive, offer.receiveAmount);
-          return;
-        }
-      }
-      const hand = G.players[current].resources;
-      const cpuCards = G.players[current].progressCards ?? [];
-      // Only auto-play cards that need no interactive choice, so the bot can
-      // never stall on a card that requires a picker.
-      const noChoiceCards = new Set(["harvest", "oreRush", "roadworks", "merchant", "warlord", "levy"]);
-      const playable = cpuCards.find((c) => noChoiceCards.has(c));
-      if (variant === "cities-knights" && playable && boardMoves.playProgressCard) {
-        boardMoves.playProgressCard(playable);
-        return;
-      }
-      const inactive = Object.entries(G.knights ?? {}).find(([id, owner]) => owner === current && !G.activeKnights?.[id])?.[0];
-      if (variant === "cities-knights" && inactive && hand.grain > 0 && boardMoves.activateKnight) {
-        boardMoves.activateKnight(inactive);
-        return;
-      }
-      const city = pickBestCity(G, validCitySpots(G, current));
-      if (city && canAfford(hand, "city")) {
-        moves.buildCity(city);
-        return;
-      }
-      const settlement = pickBestSettlement(G, validSettlementSpots(G, current, false));
-      if (settlement && canAfford(hand, "settlement")) {
-        moves.buildSettlement(settlement);
-        return;
-      }
-      const knight = pickBestCity(G, validKnightSpots(G, current));
-      if (variant === "cities-knights" && knight && canAfford(hand, "knight") && boardMoves.buildKnight) {
-        boardMoves.buildKnight(knight);
-        return;
-      }
-      const road = pickBestRoad(G, current, validRoadSpots(G, current, false));
-      if (road && canAfford(hand, "road")) {
-        moves.buildRoad(road);
-        return;
-      }
-      moves.endTurn();
+      // The once-per-turn trade-offer stage only unlocks after roll/bandit,
+      // and is marked attempted whether or not an offer materializes.
+      const offerStageReached = ctx.phase !== "setup" && G.hasRolled && !G.mustMoveBandit;
+      const allowTradeOffer = offerStageReached && botProposeRef.current !== ctx.turn;
+      if (allowTradeOffer) botProposeRef.current = ctx.turn;
+      const action = chooseBotAction(G, ctx, current, { variant, allowTradeOffer, rng: Math.random });
+      if (!action) return;
+      const dispatch = (boardMoves as Record<string, ((...args: unknown[]) => void) | undefined>)[action.move];
+      dispatch?.(...action.args);
     }, inSetup ? 420 : 650);
     return () => window.clearTimeout(timer);
-  }, [G, boardMoves, ctx.phase, ctx.turn, current, currentIsCpu, gameover, inSetup, moves, variant]);
+  }, [G, boardMoves, ctx, current, currentIsCpu, gameover, inSetup, moves, variant]);
 
   function onVertexTap(id: string) {
     if (currentIsCpu || currentIsRemote || privacyGate) return;
@@ -336,12 +394,7 @@ export default function GameBoardPlay({
       {diceFlash && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center">
           <div className="dice-popup rounded-3xl border border-white/15 bg-slate-950/90 px-7 py-6 text-center shadow-2xl backdrop-blur">
-            <div className="flex gap-3 text-5xl">
-              <span className="dice-face">{diceFlash[0]}</span>
-              <span className="dice-face">{diceFlash[1]}</span>
-            </div>
-            <p className="mt-3 text-sm font-bold text-yellow-300">Rolled {diceFlash[0] + diceFlash[1]}</p>
-            {variant === "cities-knights" && G.lastEventDie && <p className="mt-1 text-xs text-white/60">Event: {G.lastEventDie}</p>}
+            <DiceRoll roll={diceFlash} eventDie={variant === "cities-knights" ? G.lastEventDie ?? null : null} />
           </div>
         </div>
       )}
@@ -374,14 +427,16 @@ export default function GameBoardPlay({
 
       <div className="relative z-10 min-h-0 flex-1 p-2 sm:p-3">
         <div className="board-card relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20 shadow-2xl">
-          <HexBoardPlay board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
+          <BoardStage board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
           {instruction && <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/65 px-3 py-1.5 text-center text-xs font-semibold text-yellow-300 shadow-lg backdrop-blur">{instruction}</div>}
           {lastLog && <div className="pointer-events-none absolute bottom-3 left-3 max-w-[82%] rounded-xl bg-black/55 px-3 py-1.5 text-[11px] text-white/85 shadow-lg backdrop-blur">{lastLog}</div>}
         </div>
       </div>
       </div>
 
-      <div className="relative z-10 shrink-0 rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur landscape:w-[22rem] landscape:max-w-[42%] landscape:shrink-0 landscape:overflow-y-auto landscape:rounded-none landscape:rounded-l-3xl landscape:border-l landscape:border-t-0">
+      <div className="relative z-10 shrink-0 overflow-y-auto rounded-t-3xl border-t border-white/10 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2 shadow-[0_-18px_60px_rgba(0,0,0,0.45)] backdrop-blur portrait:max-h-[46dvh] landscape:w-[22rem] landscape:max-h-none landscape:max-w-[42%] landscape:shrink-0 landscape:overflow-y-auto landscape:rounded-none landscape:rounded-l-3xl landscape:border-l landscape:border-t-0">
+        {/* Sheet grabber — signals this control panel is a draggable-style sheet. */}
+        <div className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-white/20 landscape:hidden" />
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-black" style={{ color: PLAYER_COLORS[Number(current)] }}>{names[Number(current)]}&rsquo;s turn</span>
           {G.lastRoll && <span className="rounded-lg bg-white/10 px-2 py-0.5 text-sm font-bold text-white">🎲 {G.lastRoll[0]} + {G.lastRoll[1]} = {G.lastRoll[0] + G.lastRoll[1]}</span>}
@@ -394,11 +449,19 @@ export default function GameBoardPlay({
               <span>Event: {G.lastEventDie ?? "—"}</span>
               <span>Cards: {progressCards.length}</span>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
-              {COMMODITY_KEYS_ORDERED.map((key) => <span key={key} className="rounded-lg bg-black/20 px-1 py-1">{key}: {commodities[key]}</span>)}
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {COMMODITY_KEYS_ORDERED.map((key) => (
+                <div key={key} className="flex flex-col items-center rounded-lg bg-black/20 px-1 py-1.5 leading-tight">
+                  <span className="text-base leading-none">{COMMODITY_ICONS[key]}</span>
+                  <span className="mt-0.5 text-[9px] uppercase tracking-wide text-white/50">{COMMODITY_LABELS[key]}</span>
+                  <span className="text-sm font-bold text-white">{commodities[key]}</span>
+                </div>
+              ))}
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
-              {TRACK_KEYS_ORDERED.map((track) => <span key={track} className="rounded-lg bg-black/20 px-1 py-1">{track}: {improvements[track]}</span>)}
+            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+              {TRACK_KEYS_ORDERED.map((track) => (
+                <span key={track} className="rounded-lg bg-black/20 px-1 py-1 capitalize">{track}: {improvements[track]}</span>
+              ))}
             </div>
           </div>
         )}
@@ -414,13 +477,16 @@ export default function GameBoardPlay({
                 {TRACK_KEYS_ORDERED.map((track) => {
                   const cost = (improvements[track] ?? 0) + 1;
                   const commodity = TRACK_COMMODITY[track];
-                  return <button key={track} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${commodity} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold text-white disabled:opacity-30">+ {track}</button>;
+                  return <button key={track} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !hasCity || improvements[track] >= 3 || commodities[commodity] < cost || !!gameover} onClick={() => ask("Improve city", `Spend ${cost} ${COMMODITY_LABELS[commodity]} to improve ${track}.`, () => boardMoves.improveCity?.(track))} className="rounded-xl bg-white/10 py-2 text-xs font-bold capitalize text-white disabled:opacity-30">+ {track}</button>;
                 })}
-                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
+                {progressCards.slice(0, 2).map((card) => <button key={card} disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || !!gameover} onClick={() => cardNeedsChoice(card) ? setCardToPlay(card) : ask("Play progress card", `Play ${PROGRESS_CARD_LABELS[card]}.`, () => boardMoves.playProgressCard?.(card))} className="rounded-xl bg-yellow-500/90 py-2 text-xs font-black text-slate-900 disabled:opacity-30">{PROGRESS_CARD_LABELS[card]}</button>)}
               </div>
             )}
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || G.hasRolled || !!gameover} onClick={() => ask("Roll dice", variant === "cities-knights" ? "Roll production dice and the event die." : "Roll production dice.", () => moves.rollDice())} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
+              {/* No confirmation for dice — rolling isn't a choice to second-guess, and gating it
+                  behind a modal only added friction (and, in duo online, an extra tap before the
+                  remount/animation cycle). */}
+              <button disabled={privacyGate || !canControlCurrent || currentIsCpu || G.hasRolled || !!gameover} onClick={() => moves.rollDice()} className="rounded-xl bg-yellow-500 py-3 text-sm font-black text-slate-900 disabled:opacity-30">🎲 Roll</button>
               <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => setShowTrade(true)} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">Trade</button>
               <button disabled={privacyGate || !canControlCurrent || currentIsCpu || !G.hasRolled || G.mustMoveBandit || !!gameover} onClick={() => ask("End turn", "Pass the turn to the next player.", () => { setBuildMode(null); moves.endTurn(); })} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white disabled:opacity-30">End turn</button>
             </div>
@@ -432,51 +498,68 @@ export default function GameBoardPlay({
         <TradePanel
           theme={theme}
           resources={resources}
-          players={G.players}
-          currentPlayer={current}
-          playerNames={names}
-          playerModes={playerModes}
-          onTrade={(give, receive) => { setShowTrade(false); ask("Confirm bank trade", `Trade 4 ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
+          commodities={commodities}
+          variant={variant}
+          rateFor={(give) => maritimeRate(G, current, give)}
+          ownedHarbors={[...playerHarborTypes(G, current)]}
+          merchantGuild={hasMerchantGuild(G, current)}
+          rivals={rivals}
+          onTrade={(give, receive) => { const r = maritimeRate(G, current, give); setShowTrade(false); ask("Confirm bank trade", `Trade ${r} ${give} for 1 ${receive}.`, () => moves.bankTrade(give, receive)); }}
           onPlayerTrade={(target, give, giveAmount, receive, receiveAmount) => {
+            // The engine settles bot targets immediately (surfacing a result banner)
+            // and parks a human offer in pendingTrade for the private review flow.
             setShowTrade(false);
-            const offer = { proposer: current, target, give, giveAmount, receive, receiveAmount };
-            if (isBotSeat(G, target)) {
-              const decision = evaluateBotTrade(G, offer);
-              setTradeNotice(decision.reason);
-              if (decision.accepted) boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount);
-              return;
-            }
-            setPendingAction({
-              title: `Pass to ${names[Number(target)]}`,
-              body: `${names[Number(current)]} offers ${giveAmount} ${give} for ${receiveAmount} ${receive}. Only ${names[Number(target)]} should accept or refuse.`,
-              run: () => setPendingAction({ title: "Accept trade?", body: "Review the public offer. Your exact resources remain private until you choose.", run: () => boardMoves.playerTrade?.(target, give, giveAmount, receive, receiveAmount) }),
-            });
+            boardMoves.proposeTrade?.(target, give, giveAmount, receive, receiveAmount);
           }}
           onClose={() => setShowTrade(false)}
         />
       )}
 
-      {/* Private trade response flow (human target): handoff → review → result. */}
-      {pendingTrade && !tradeReviewed && (
-        <PrivacyOverlay
-          playerName={names[Number(pendingTrade.to)]}
-          color={PLAYER_COLORS[Number(pendingTrade.to)]}
-          title="Trade offer"
-          subtitle={`${names[Number(pendingTrade.from)]} sent you a private offer.`}
-          actionLabel={`I'm ${names[Number(pendingTrade.to)]} — Review offer`}
-          onReady={() => setTradeReviewed(true)}
-        />
-      )}
-      {pendingTrade && tradeReviewed && (
-        <TradeReview
-          offer={pendingTrade}
-          theme={theme}
-          proposerName={names[Number(pendingTrade.from)]}
-          responderName={names[Number(pendingTrade.to)]}
-          canPay={G.players[pendingTrade.to].resources[pendingTrade.receive] >= pendingTrade.receiveAmount}
-          onAccept={() => { boardMoves.respondTrade?.(true); setTradeReviewed(false); }}
-          onRefuse={() => { boardMoves.respondTrade?.(false); setTradeReviewed(false); }}
-        />
+      {/* Trade response flow. Online: a bottom sheet over the still-mounted
+          board, no "pass the device" handoff — each phone is already the
+          right player's own device. Local pass-and-play keeps its original
+          handoff → private review flow, unchanged. */}
+      {onlineMode ? (
+        pendingTrade && (
+          <OnlineTradePanel
+            offer={pendingTrade}
+            theme={theme}
+            role={myTradeRole}
+            proposerName={names[Number(pendingTrade.from)]}
+            responderName={names[Number(pendingTrade.to)]}
+            canResponderPay={canResponderPayFor(G, pendingTrade)}
+            expired={tradeStale}
+            busy={tradeActionBusy}
+            failed={tradeActionStuck}
+            onAccept={() => runTradeAction(() => boardMoves.respondTrade?.(true))}
+            onRefuse={() => runTradeAction(() => boardMoves.respondTrade?.(false))}
+            onCancel={() => runTradeAction(() => boardMoves.cancelTrade?.())}
+          />
+        )
+      ) : (
+        <>
+          {pendingTrade && !tradeReviewed && (
+            <PrivacyOverlay
+              playerName={names[Number(pendingTrade.to)]}
+              color={PLAYER_COLORS[Number(pendingTrade.to)]}
+              title="Trade offer"
+              subtitle={`${names[Number(pendingTrade.from)]} sent you a private offer.`}
+              actionLabel={`I'm ${names[Number(pendingTrade.to)]} — Review offer`}
+              onReady={() => setTradeReviewed(true)}
+            />
+          )}
+          {pendingTrade && tradeReviewed && (
+            <TradeReview
+              offer={pendingTrade}
+              theme={theme}
+              proposerName={names[Number(pendingTrade.from)]}
+              responderName={names[Number(pendingTrade.to)]}
+              canPay={G.players[pendingTrade.to].resources[pendingTrade.receive] >= pendingTrade.receiveAmount}
+              onAccept={() => { boardMoves.respondTrade?.(true); setTradeReviewed(false); }}
+              onRefuse={() => { boardMoves.respondTrade?.(false); setTradeReviewed(false); }}
+            />
+          )}
+        </>
       )}
       {!pendingTrade && tradeResult && (
         <TradeResultBanner
@@ -498,15 +581,6 @@ export default function GameBoardPlay({
         />
       )}
 
-      {/* Pass-the-device curtain between human turns. */}
-      {needsHandoff && (
-        <PrivacyOverlay
-          playerName={names[Number(current)]}
-          color={PLAYER_COLORS[Number(current)]}
-          onReady={() => setAckPlayer(current)}
-        />
-      )}
-
       {pendingAction && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-5">
           <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-5 text-white shadow-2xl">
@@ -520,9 +594,15 @@ export default function GameBoardPlay({
         </div>
       )}
 
-      {currentIsRemote && !gameover && (
+      {currentIsRemote && !currentIsRemoteBot && !gameover && (
         <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-sky-300/30 bg-sky-950/90 p-3 text-center text-sm font-bold text-sky-100 shadow-2xl">
           Remote seat reserved for {names[Number(current)]}. Only that remote player can act for this seat online.
+        </div>
+      )}
+
+      {currentIsRemoteBot && !gameover && (
+        <div className="fixed inset-x-4 bottom-28 z-[65] rounded-2xl border border-amber-300/30 bg-amber-950/90 p-3 text-center text-sm font-bold text-amber-100 shadow-2xl">
+          🤖 {names[Number(current)]} is thinking…
         </div>
       )}
 
@@ -556,46 +636,3 @@ export default function GameBoardPlay({
   );
 }
 
-function tokenWeight(token: number | null): number { return token ? TOKEN_PIPS[token] ?? 0 : 0; }
-function vertexScore(G: GameState, vertexId: string): number {
-  const geo = getGeometry(G.board);
-  const resources = new Set<string>();
-  let score = 0;
-  for (const tileId of geo.vertices[vertexId].tiles) {
-    const tile = G.board.tiles[tileId];
-    if (!tile || tile.resource === "desert") continue;
-    resources.add(tile.resource);
-    score += tokenWeight(tile.token) * 2;
-  }
-  return score + resources.size * 1.8;
-}
-function pickBestSettlement(G: GameState, spots: string[]): string | null { return spots.length === 0 ? null : [...spots].sort((a, b) => vertexScore(G, b) - vertexScore(G, a))[0]; }
-function pickBestRoad(G: GameState, player: string, spots: string[]): string | null {
-  if (spots.length === 0) return null;
-  const geo = getGeometry(G.board);
-  return [...spots].sort((a, b) => {
-    const edgeA = geo.edges[a]; const edgeB = geo.edges[b];
-    const scoreA = Math.max(vertexScore(G, edgeA.a), vertexScore(G, edgeA.b));
-    const scoreB = Math.max(vertexScore(G, edgeB.a), vertexScore(G, edgeB.b));
-    const ownA = Number(G.buildings[edgeA.a]?.player === player || G.buildings[edgeA.b]?.player === player);
-    const ownB = Number(G.buildings[edgeB.a]?.player === player || G.buildings[edgeB.b]?.player === player);
-    return scoreB + ownB - (scoreA + ownA);
-  })[0];
-}
-function pickBestCity(G: GameState, spots: string[]): string | null { return spots.length === 0 ? null : [...spots].sort((a, b) => vertexScore(G, b) - vertexScore(G, a))[0]; }
-function pickBestBanditTile(G: GameState, player: string, tileIds: number[]): number | null {
-  if (tileIds.length === 0) return null;
-  const geo = getGeometry(G.board);
-  return [...tileIds].sort((a, b) => banditScore(G, geo, player, b) - banditScore(G, geo, player, a))[0];
-}
-function banditScore(G: GameState, geo: ReturnType<typeof getGeometry>, player: string, tileId: number): number {
-  const tile = G.board.tiles[tileId];
-  let score = tokenWeight(tile?.token ?? null);
-  for (const vertex of Object.values(geo.vertices)) {
-    if (!vertex.tiles.includes(tileId)) continue;
-    const building = G.buildings[vertex.id];
-    if (!building) continue;
-    score += building.player === player ? -4 : 6;
-  }
-  return score;
-}

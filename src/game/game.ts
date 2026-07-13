@@ -1,4 +1,4 @@
-import type { Game } from "boardgame.io";
+import type { FnContext, Game } from "boardgame.io";
 import type { Board, GameState, GameVariant, OnlineSetupData, PlayerSetup } from "@/types/game";
 import {
   devDeck,
@@ -23,7 +23,6 @@ import {
   deactivateKnight,
   endTurn,
   improveCity,
-  upgradeKnight,
   moveBandit,
   placeRoad,
   placeSettlement,
@@ -69,7 +68,28 @@ const PLAY_MOVES = {
   endTurn,
 } as const;
 
-const RESET_TURN = ({ G }: { G: GameState }) => {
+const RESET_TURN = ({ G, events }: FnContext<GameState>) => {
+  // Duo-online: each device rebuilds a brand-new boardgame.io client from
+  // the latest synced snapshot on every action (see DuoGame.tsx), and the
+  // hand-rolled Firebase wire protocol only carries {currentPlayer, phase,
+  // turn, playOrderPos} — NOT ctx.activePlayers (boardgame.io's own
+  // multiplayer transport would sync that automatically; this one doesn't).
+  // So a fresh mount always starts with activePlayers=null regardless of
+  // what proposeTrade set on the originating device. Re-derive it here,
+  // every time this phase begins (which fires once immediately even for a
+  // mid-turn resume) — otherwise a pending trade's target can never
+  // dispatch respondTrade from their own remounted client.
+  if (G.pendingTrade) {
+    events.setActivePlayers([G.pendingTrade.from, G.pendingTrade.to]);
+  }
+  // Duo-online resume: a snapshot can land MID-turn (the opponent rolled and
+  // built, then synced). The first synthetic "turn begin" after rebuilding a
+  // client from such a snapshot must not wipe hasRolled/lastRoll — the guard
+  // flag is set once by createDuoGame's setup and consumed here.
+  if (G._duoSkipTurnReset) {
+    delete G._duoSkipTurnReset;
+    return;
+  }
   G.hasRolled = false;
   G.lastRoll = null;
   G.mustMoveBandit = false;
@@ -103,6 +123,7 @@ export function initialState(
       ? names
       : Array.from({ length: numPlayers }, (_, i) => PLAYER_NAMES[i] ?? `Player ${i + 1}`);
   const desert = board.tiles.find((t) => t.resource === "desert");
+  const setups = normalizePlayerSetups(numPlayers, playerSetups);
 
   return {
     numPlayers,
@@ -110,10 +131,10 @@ export function initialState(
     players,
     names: resolvedNames,
     playerNames: resolvedNames,
-    playerModes,
-    difficulties,
+    playerModes: setups.map((s) => s.mode),
+    difficulties: setups.map((s) => s.botDifficulty ?? "normal"),
     variant,
-    playerSetups: normalizePlayerSetups(numPlayers, playerSetups),
+    playerSetups: setups,
     buildings: {},
     roads: {},
     knights: {},
@@ -160,26 +181,7 @@ const PHASES: Game<GameState>["phases"] = {
   },
 
   play: {
-    moves: {
-      rollDice,
-      moveBandit,
-      buildRoad,
-      buildSettlement,
-      buildCity,
-      buildKnight,
-      activateKnight,
-      improveCity,
-      upgradeKnight,
-      playProgressCard,
-      bankTrade,
-      playerTrade,
-      buyDevCard,
-      playKnight,
-      playRoadBuilding,
-      playYearOfPlenty,
-      playMonopoly,
-      endTurn,
-    },
+    moves: PLAY_MOVES,
     turn: {
       order: {
         first: () => 0,
@@ -232,6 +234,54 @@ export function createResumeGame(
     phases: {
       play: {
         start: true,
+        moves: PLAY_MOVES,
+        turn: {
+          order: {
+            first: () => startPlayOrderPos % Math.max(1, savedG.numPlayers),
+            next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers,
+          },
+          onBegin: RESET_TURN,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Duo-online (Firebase-synced) game: each phone rebuilds a local client from
+ * the latest shared snapshot, which — unlike createResumeGame — may land in
+ * EITHER phase and mid-turn. The setup phase's first player is derived from
+ * G.setupStep, and RESET_TURN is skipped exactly once via _duoSkipTurnReset
+ * so a mid-turn snapshot keeps its hasRolled/lastRoll state.
+ */
+export function createDuoGame(
+  savedG: GameState,
+  startPhase: "setup" | "play",
+  startPlayOrderPos: number,
+): Game<GameState> {
+  return {
+    name: "hamsa-nomads",
+    setup: () => ({ ...savedG, _duoSkipTurnReset: true }),
+    endIf: END_IF,
+    phases: {
+      setup: {
+        start: startPhase === "setup",
+        moves: { placeSettlement, placeRoad },
+        turn: {
+          order: {
+            first: ({ G }) =>
+              G.setupStep >= 2 * G.numPlayers ? 0 : setupOrder(G.numPlayers, G.setupStep),
+            next: ({ G }) => {
+              if (G.setupStep >= 2 * G.numPlayers) return undefined;
+              return setupOrder(G.numPlayers, G.setupStep);
+            },
+          },
+        },
+        endIf: ({ G }) => G.setupStep >= 2 * G.numPlayers,
+        next: "play",
+      },
+      play: {
+        start: startPhase === "play",
         moves: PLAY_MOVES,
         turn: {
           order: {

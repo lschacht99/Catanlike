@@ -21,7 +21,7 @@ const SECTIONS: Section[] = [
     title: "Cities & Knights",
     emoji: "🛡️",
     points: [
-      "Cities on ore, wool, or wood also make commodities (coin, cloth, book).",
+      "Cities on wood, ore, or wool also make a commodity — Paper, Coin, or Cloth.",
       "Spend commodities to raise three city tracks; higher tracks draw stronger progress cards.",
       "Build knights, activate them with grain, and upgrade them to defend against raiders.",
       "An event die advances the raiders. When they arrive, total active knight strength is compared to the number of cities — win together or the weakest defender loses a city. Win at 13 points.",

@@ -2,39 +2,47 @@ import type { Theme } from "@/types/theme";
 import { HAMSA_THEME } from "./hamsa-theme";
 import { ISRAEL_THEME } from "./israel-theme";
 import { JEWISH_THEME } from "./jewish-theme";
+import { GAME_ASSETS } from "./assets/assetManifest";
 
 export const CLASSIC_THEME: Theme = {
   id: "classic",
   name: "Classic Isles",
   resources: {
     wood: {
-      label: "Timber", color: "#2e7d32", icon: "🌲",
-      tilePrompt: "dense evergreen forest hex tile, board game style",
+      label: "Timber", color: "#55723f", icon: "🌲",
+      tileArt: GAME_ASSETS.classic.terrain.wood,
+      tilePrompt: "dense evergreen forest hex tile, original tabletop island style",
     },
     brick: {
-      label: "Brick", color: "#c0562f", icon: "🧱",
-      tilePrompt: "red clay quarry hex tile, board game style",
+      label: "Brick", color: "#b75f3d", icon: "🧱",
+      tileArt: GAME_ASSETS.classic.terrain.brick,
+      tilePrompt: "red clay quarry hex tile, original tabletop island style",
     },
     grain: {
-      label: "Grain", color: "#e0b431", icon: "🌾",
-      tilePrompt: "golden wheat field hex tile, board game style",
+      label: "Grain", color: "#d2a93f", icon: "🌾",
+      tileArt: GAME_ASSETS.classic.terrain.grain,
+      tilePrompt: "golden wheat field hex tile, original tabletop island style",
     },
     wool: {
-      label: "Wool", color: "#8bc34a", icon: "🐑",
-      tilePrompt: "green sheep pasture hex tile, board game style",
+      label: "Wool", color: "#91a978", icon: "🐑",
+      tileArt: GAME_ASSETS.classic.terrain.wool,
+      tilePrompt: "green sheep pasture hex tile, original tabletop island style",
     },
     ore: {
-      label: "Ore", color: "#78909c", icon: "⛏️",
-      tilePrompt: "grey stone mountain hex tile, board game style",
+      label: "Ore", color: "#6d7880", icon: "⛏️",
+      tileArt: GAME_ASSETS.classic.terrain.ore,
+      tilePrompt: "slate and granite mountain hex tile, original tabletop island style",
     },
   },
   desert: {
-    label: "Badlands", color: "#d9c493", icon: "🏜️",
-    tilePrompt: "dry sandy badlands hex tile, board game style",
+    label: "Badlands", color: "#d7bd83", icon: "🏜️",
+    tileArt: GAME_ASSETS.classic.terrain.desert,
+    tilePrompt: "dry sandy badlands hex tile, original tabletop island style",
   },
   bandit: { label: "Bandit", icon: "🗿" },
   terms: { road: "Road", settlement: "Village", city: "City", knight: "Knight" },
-  board: { sea: "#e9decb" },
+  board: { sea: GAME_ASSETS.classic.water.deep },
+  visuals: GAME_ASSETS.classic,
 };
 
 export const JAPAN_THEME: Theme = {

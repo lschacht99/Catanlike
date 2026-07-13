@@ -3,11 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "assets:generate": "node scripts/generate-game-assets.mjs && node scripts/finalize-game-assets.mjs",
+    "predev": "npm run assets:generate",
     "dev": "next dev",
+    "prebuild": "npm run assets:generate",
     "build": "next build",
+    "prepages:build": "npm run assets:generate",
     "pages:build": "GITHUB_PAGES=true NEXT_PUBLIC_BASE_PATH=/Catanlike next build",
     "start": "node scripts/serve-static.mjs",
     "lint": "next lint",
+    "pretest": "npm run assets:generate",
     "test": "vitest run",
     "server": "tsx server/index.ts"
   },

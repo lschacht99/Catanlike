@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Israel Landscape sea">
+<defs>
+<filter id="paper" x="-10%" y="-10%" width="120%" height="120%">
+  <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="19" result="n"/>
+  <feColorMatrix in="n" type="saturate" values="0" result="g"/>
+  <feComponentTransfer in="g" result="a"><feFuncA type="table" tableValues="0 .11"/></feComponentTransfer>
+  <feBlend in="SourceGraphic" in2="a" mode="multiply"/>
+</filter>
+<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f2eadb"/><stop offset="1" stop-color="#176f8f"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+<rect width="512" height="512" fill="url(#sky)"/>
+<rect width="512" height="512" fill="url(#sun)"/>
+<g filter="url(#paper)"><rect width="512" height="512" fill="#176f8f"/><path d="M-30 92 C75 44 148 131 245 82 C342 33 417 112 548 54M-25 225 C79 173 167 264 270 213 C371 163 446 239 552 190M-35 365 C73 317 157 401 264 350 C367 301 454 375 551 330" fill="none" stroke="#a8d9dc" stroke-width="15" stroke-linecap="round" opacity=".43"/><path d="M-25 160 C67 116 135 184 231 143 C329 101 405 172 540 113M-20 300 C73 258 160 327 252 285 C348 241 430 307 540 260" fill="none" stroke="#f2eadb" stroke-width="6" opacity=".36"/></g></svg>

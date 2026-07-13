@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hamsa Nomads desert">
+<defs>
+<filter id="paper" x="-10%" y="-10%" width="120%" height="120%">
+  <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="19" result="n"/>
+  <feColorMatrix in="n" type="saturate" values="0" result="g"/>
+  <feComponentTransfer in="g" result="a"><feFuncA type="table" tableValues="0 .11"/></feComponentTransfer>
+  <feBlend in="SourceGraphic" in2="a" mode="multiply"/>
+</filter>
+<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F6F2E7"/><stop offset="1" stop-color="#DCC7A1"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+<rect width="512" height="512" fill="url(#sky)"/>
+<rect width="512" height="512" fill="url(#sun)"/>
+<g filter="url(#paper)"><path d="M0 260 C98 194 177 250 278 199 C368 154 425 194 512 150V512H0Z" fill="#DCC7A1" opacity=".9"/><path d="M0 386 C130 319 230 386 339 324 C412 283 460 307 512 278" fill="none" stroke="#F6F2E7" stroke-width="18" opacity=".55"/><path d="M35 176 C139 130 220 162 311 119 C384 84 451 101 496 75" fill="none" stroke="#C88B6A" stroke-width="6" stroke-dasharray="16 17" opacity=".55"/><g transform="translate(340 235) rotate(-8)"><rect width="125" height="84" rx="12" fill="#F6F2E7" stroke="#111111" stroke-width="5"/><circle cx="63" cy="42" r="25" fill="none" stroke="#C88B6A" stroke-width="5" stroke-dasharray="8 7"/><path d="M25 18h75M28 66h69" stroke="#111111" stroke-width="4" opacity=".6"/></g></g></svg>

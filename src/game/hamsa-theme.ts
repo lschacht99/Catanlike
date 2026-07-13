@@ -1,4 +1,5 @@
 import type { Theme } from "@/types/theme";
+import { GAME_ASSETS } from "./assets/assetManifest";
 
 export const HAMSA_THEME: Theme = {
   id: "hamsa",
@@ -6,48 +7,49 @@ export const HAMSA_THEME: Theme = {
   resources: {
     wood: {
       label: "Olive Route",
-      color: "#758b49",
+      color: "#7F8A6A",
       icon: "🫒",
-      tileArt: "/hex-olive-route.svg",
+      tileArt: GAME_ASSETS.hamsa.terrain.wood,
       tilePrompt: "olive grove route hex tile, warm Hamsa Nomads style",
     },
     brick: {
       label: "Terracotta Stop",
-      color: "#b96a4a",
+      color: "#C88B6A",
       icon: "🧱",
-      tileArt: "/hex-terracotta-stop.svg",
+      tileArt: GAME_ASSETS.hamsa.terrain.brick,
       tilePrompt: "terracotta travel stop hex tile",
     },
     grain: {
       label: "Market Harvest",
-      color: "#d9b54f",
+      color: "#DCC7A1",
       icon: "🌾",
-      tileArt: "/hex-market-harvest.svg",
+      tileArt: GAME_ASSETS.hamsa.terrain.grain,
       tilePrompt: "golden market harvest hex tile",
     },
     wool: {
       label: "Tent Weave",
-      color: "#8aa67b",
+      color: "#91a978",
       icon: "⛺",
-      tileArt: "/hex-tent-weave.svg",
+      tileArt: GAME_ASSETS.hamsa.terrain.wool,
       tilePrompt: "nomad tent weaving hex tile",
     },
     ore: {
       label: "Compass Brass",
-      color: "#7d7264",
+      color: "#756f66",
       icon: "🧭",
-      tileArt: "/hex-compass-brass.svg",
+      tileArt: GAME_ASSETS.hamsa.terrain.ore,
       tilePrompt: "brass compass workshop hex tile",
     },
   },
   desert: {
     label: "Passport Sands",
-    color: "#d7be92",
-    icon: "🧿",
-    tileArt: "/hex-passport-sands.svg",
+    color: "#DCC7A1",
+    icon: "🏜️",
+    tileArt: GAME_ASSETS.hamsa.terrain.desert,
     tilePrompt: "passport stamp desert hex tile",
   },
   bandit: { label: "Lost Luggage", icon: "🧳" },
   terms: { road: "Route", settlement: "Camp", city: "Medina", knight: "Scout" },
-  board: { sea: "#f6ecd9" },
+  board: { sea: GAME_ASSETS.hamsa.water.deep },
+  visuals: GAME_ASSETS.hamsa,
 };

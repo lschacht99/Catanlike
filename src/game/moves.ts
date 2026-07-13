@@ -331,10 +331,13 @@ export const upgradeKnight: Move<GameState> = ({ G, playerID }, vertexId?: strin
     ([k, owner]) => owner === player && (G.knightLevels[k] ?? 1) < KNIGHT_MAX_LEVEL,
   )?.[0];
   if (!id || G.knights[id] !== player) return INVALID_MOVE;
-  if ((G.knightLevels[id] ?? 1) >= KNIGHT_MAX_LEVEL) return INVALID_MOVE;
+  const currentLevel = G.knightLevels[id] ?? 1;
+  if (currentLevel >= KNIGHT_MAX_LEVEL) return INVALID_MOVE;
+  // Cities & Knights: Mighty knights require Politics level 3 (Fortress).
+  if (currentLevel === 2 && (G.players[player].improvements?.politics ?? 0) < 3) return INVALID_MOVE;
   if (!canPayCost(G.players[player].resources, KNIGHT_UPGRADE_COST)) return INVALID_MOVE;
   pay(G.players[player].resources, KNIGHT_UPGRADE_COST);
-  G.knightLevels[id] = (G.knightLevels[id] ?? 1) + 1;
+  G.knightLevels[id] = currentLevel + 1;
   log(G, `${playerName(G, player)} upgraded a knight to strength ${G.knightLevels[id]}.`);
 };
 

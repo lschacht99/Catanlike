@@ -165,7 +165,7 @@ export const PROGRESS_HAND_LIMIT = 4;
 
 /** Upgrading a basic knight to a strong knight (level 2). */
 export const KNIGHT_UPGRADE_COST: Partial<ResourceCounts> = { wool: 1, ore: 1 };
-export const KNIGHT_MAX_LEVEL = 2;
+export const KNIGHT_MAX_LEVEL = 3;
 
 export function emptyResources(): ResourceCounts {
   return { wood: 0, brick: 0, grain: 0, wool: 0, ore: 0 };

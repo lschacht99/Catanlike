@@ -12,11 +12,12 @@ The Hamsa pack follows the supplied identity: warm cream and parchment, sand, cl
 npm run assets:generate
 ```
 
-The generator is safe to run repeatedly and does not use network calls, paid APIs, AI services, binary encoders, or runtime downloads. `predev`, `pretest`, `prebuild`, and `prepages:build` run it automatically.
+The command runs:
 
-Generator:
+- `scripts/generate-game-assets.mjs` — creates terrain, materials, cards, the main sprite, manifest, and contact sheet
+- `scripts/finalize-game-assets.mjs` — normalizes the sprite, adds badge symbols, writes every symbol as an individual SVG, and records exact counts
 
-- `scripts/generate-game-assets.mjs`
+The pipeline is deterministic, safe to rerun, and uses no network calls, paid APIs, runtime AI, binary encoders, or remote downloads. `predev`, `pretest`, `prebuild`, and `prepages:build` run it automatically.
 
 Generated root:
 
@@ -24,14 +25,18 @@ Generated root:
 
 ## Generated inventory
 
+The generated manifest is the source of truth and currently records **132 generated files**:
+
 - 21 terrain illustrations: 7 terrains × 3 themes
 - 11 seamless/material SVGs
-- 77 SVG sprite symbols: resource, commodity, discipline, build, harbor, dice, development-card, progress-card, and status icons
+- 91 symbols in the combined SVG sprite
+- 91 matching standalone SVG icons, including normal dice, red dice, event dice, harbors, cards, badges, and state icons
 - 6 original card-frame assets
 - 1 JSON manifest
 - 1 visual contact sheet
+- 1 combined sprite sheet
 
-The source generator is canonical. Generated files are created before every local/deployment build so GitHub Pages, Vercel, and local development receive identical output.
+Generated files are committed and are also recreated before local and deployment builds, so Vercel, GitHub Pages, tests, and local development receive identical output.
 
 ## Directory structure
 
@@ -58,6 +63,12 @@ public/assets/game/
       progress-politics.svg
       progress-science.svg
       card-back.svg
+    ui/
+      *.svg
+    dice/
+      die-*.svg
+      red-die-*.svg
+      event-*.svg
   sprites/
     game-icons.svg
   themes/
@@ -105,7 +116,7 @@ src/components/board3d/pieces/
 - ore: Compass Brass
 - desert: Passport Sands
 - architecture: cream medina, flat roofs, arches, blue windows, carved doors, stairs
-- knight style: traveling scout with level marks and a restrained active-state brass ring
+- knight style: traveling scout with visible level marks and a restrained active-state brass ring
 - harbor style: warm dock, cream sailcloth, clay hull, hand-painted trade plaque
 
 ### Israel Landscape
@@ -124,16 +135,18 @@ No theme asset contains flags, military insignia, modern political symbols, or M
 ## Naming conventions
 
 - canonical terrain keys remain `wood`, `brick`, `grain`, `wool`, `ore`, and `desert`
+- canonical commodity and discipline keys remain unchanged
 - generated paths use lowercase kebab-case
-- theme visuals never change game-rule keys
-- miniature ownership uses `PLAYER_COLORS`; architecture uses theme materials
+- theme visuals never alter gameplay-rule keys
+- ownership uses `PLAYER_COLORS`; architecture uses theme materials
 - knight rank is numeric `1`, `2`, or `3`; active state is a separate boolean
+- standalone icon names match their sprite symbol IDs
 
 ## Rendering
 
 ### 2D
 
-`HexBoardPlay` clips each square terrain SVG into the actual pointy-top board hex. It renders roads, settlements, cities, knights, bandit, tokens, and valid-placement targets as vectors. Knights are separate from buildings and have visible rank marks and distinct active/inactive states.
+`HexBoardPlay` clips each square terrain SVG into the actual pointy-top board hex. It renders roads, settlements, cities, knights, bandit, tokens, and valid-placement targets as vectors. Knights are independent of buildings and show rank and active/inactive state.
 
 ### 3D
 
@@ -142,11 +155,11 @@ No theme asset contains flags, military insignia, modern political symbols, or M
 - a shared module-level texture cache
 - one GPU-driven water surface with no React state updates per frame
 - theme-specific water, sand, sky, buildings, knights, harbors, and terrain decor
-- independent knight meshes for level and active state
+- independent knight meshes for levels 1–3 and active state
 - deterministic decor placement outside the number-token center
-- preserved large invisible touch targets and orbit-drag protection
+- large invisible touch targets and orbit-drag protection
 
-Common pieces are lightweight React Three Fiber geometry rather than unvalidated binary models. No Three.js object is stored in the game state or Firebase snapshot.
+Common pieces are lightweight React Three Fiber geometry rather than unvalidated binary models. No Three.js object, texture, material, or function is stored in the game state or Firebase snapshot.
 
 ## Base paths
 
@@ -158,31 +171,30 @@ Supported targets:
 - Vercel: `/assets/game/...`
 - GitHub Pages: `/Catanlike/assets/game/...`
 
-Custom remote image/data URLs remain unchanged.
+Custom remote image and data URLs remain unchanged.
 
 ## Fallback behavior
 
-Old/custom themes do not need the new `visuals` field. They fall back to the Classic visual pack while preserving their own colors, labels, custom tile images, and saved localStorage shape.
+Old and custom themes do not need the optional `visuals` field. They fall back to the Classic visual pack while preserving their own colors, labels, custom tile images, and saved localStorage shape.
 
-If WebGL is unavailable or the 3D board throws, `BoardStage` uses the full 2D SVG renderer. If a terrain texture has not decoded yet, the underlying terrain color remains visible.
+If WebGL is unavailable or the 3D board throws, `BoardStage` uses the complete 2D SVG renderer. If a terrain texture has not decoded yet, the underlying terrain color remains visible.
 
 ## Performance budgets
 
-- generated terrain is SVG rather than 4K raster data
+- SVG terrain instead of unnecessary 4K raster textures
 - no external runtime asset requests
 - no per-frame React updates for water
-- texture cache survives online snapshot remounts
-- decor does not cast individual shadows
-- common pieces use low-segment geometry
-- Canvas DPR is capped at 1.7
-- shared material/texture objects are never put into serialized state
+- texture cache survives serialized online snapshots
+- lightweight terrain decor and low-segment miniature geometry
+- Canvas device-pixel ratio capped at 1.7
+- shared GPU resources never enter serialized state
 
 ## Adding a fourth theme
 
 1. Add palette and terrain design rules to `themeData` in `scripts/generate-game-assets.mjs`.
 2. Extend `BuiltinVisualThemeId`.
-3. Add the new pack to `GAME_ASSETS`.
-4. Add `tileArt` and `visuals` to the new `Theme` object.
+3. Add the pack to `GAME_ASSETS`.
+4. Add `tileArt` and `visuals` to the theme object.
 5. Run `npm run assets:generate`.
 6. Verify the new row in `public/assets/game/preview/asset-contact-sheet.svg`.
 7. Run `npm test`, `npm run build`, and `npm run pages:build`.
@@ -194,6 +206,6 @@ If WebGL is unavailable or the 3D board throws, `BoardStage` uses the full 2D SV
 - barbarian ship
 - merchant
 - city wall
-- trade/politics/science metropolis
+- trade, politics, and science metropolises
 
-They are intentionally not attached to serialized board positions until the corresponding game-state fields exist. This prevents fake visual state and keeps online snapshots canonical.
+They are intentionally not attached to serialized board positions until corresponding canonical game-state fields exist. This avoids fake visual state and preserves online synchronization.

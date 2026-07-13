@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "assets:generate": "node scripts/generate-game-assets.mjs",
+    "assets:generate": "node scripts/generate-game-assets.mjs && node scripts/finalize-game-assets.mjs",
     "predev": "npm run assets:generate",
     "dev": "next dev",
     "prebuild": "npm run assets:generate",

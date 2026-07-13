@@ -80,9 +80,7 @@ export default function HexBoardPlay({
       {onEdgeTap&&[...he].map((edgeId)=>{const edge=geo.edges[edgeId];if(!edge)return null;const a=geo.vertices[edge.a],b=geo.vertices[edge.b];return <g key={`ghost:${edgeId}`} onClick={()=>onEdgeTap(edgeId)}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth="6"/><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#f59e0b" strokeWidth="1.7" strokeDasharray="1.4 1" strokeLinecap="round"/></g>;})}
 
       {Object.entries(buildings).map(([vertexId,building])=>{const v=geo.vertices[vertexId];if(!v)return null;const color=PLAYER_COLORS[Number(building.player)];const clickable=hv.has(vertexId)&&!!onVertexTap;return <Building2D key={vertexId} x={v.x} y={v.y} city={building.city} color={color} style={theme.visuals?.pieces.architecture??"classic"} clickable={clickable} onClick={()=>clickable&&onVertexTap?.(vertexId)}/>;})}
-
       {Object.entries(knights).map(([vertexId,player])=>{const v=geo.vertices[vertexId];if(!v)return null;return <Knight2D key={`knight:${vertexId}`} x={v.x} y={v.y} color={PLAYER_COLORS[Number(player)]} level={knightLevels[vertexId]??1} active={activeKnights[vertexId]??false} onClick={()=>hv.has(vertexId)&&onVertexTap?.(vertexId)}/>;})}
-
       {onVertexTap&&[...hv].filter((id)=>!buildings[id]&&!knights[id]).map((vertexId)=>{const v=geo.vertices[vertexId];if(!v)return null;return <g key={`marker:${vertexId}`} onClick={()=>onVertexTap(vertexId)}><circle cx={v.x} cy={v.y} r="3.4" fill="transparent"/><circle cx={v.x} cy={v.y} r="1.8" fill="rgba(245,158,11,.55)" stroke="#f59e0b" strokeWidth=".5"/></g>;})}
     </svg>
   </div>;
@@ -91,9 +89,10 @@ export default function HexBoardPlay({
 function Building2D({x,y,city,color,style,clickable,onClick}:{x:number;y:number;city:boolean;color:string;style:string;clickable:boolean;onClick:()=>void}) {
   const fill=style==="medina"?"#F6F2E7":style==="limestone"?"#d8c8a5":color;
   const stroke=clickable?"#f59e0b":"#0f172a";
+  const strokeWidth=clickable?.7:.4;
   return <g onClick={onClick} filter="url(#pieceShadow)">
     <ellipse cx={x} cy={y+2.1} rx={city?3.2:2.3} ry=".7" fill="rgba(38,27,18,.36)"/>
-    {city?<><path d={`M${x-2.8} ${y+1.9}V${y-1.4}H${x+1.2}V${y-3.2}H${x+2.8}V${y+1.9}Z`} fill={fill} stroke={stroke} strokeWidth={clickable?.7:.4}/><path d={`M${x-2.6} ${y-.5}H${x+2.6}`} stroke={color} strokeWidth=".65"/><rect x={x-.5} y={y-.5} width="1" height="2.4" fill="#8a542f"/></>:<><path d={`M${x-1.9} ${y+1.6}V${y-.7}L${x} ${y-2.1}L${x+1.9} ${y-.7}V${y+1.6}Z`} fill={fill} stroke={stroke} strokeWidth={clickable?.7:.4}/><path d={`M${x-1.5} ${y-.2}H${x+1.5}`} stroke={color} strokeWidth=".55"/></>}
+    {city?<><path d={`M${x-2.8} ${y+1.9}V${y-1.4}H${x+1.2}V${y-3.2}H${x+2.8}V${y+1.9}Z`} fill={fill} stroke={stroke} strokeWidth={strokeWidth}/><path d={`M${x-2.6} ${y-.5}H${x+2.6}`} stroke={color} strokeWidth=".65"/><rect x={x-.5} y={y-.5} width="1" height="2.4" fill="#8a542f"/></>:<><path d={`M${x-1.9} ${y+1.6}V${y-.7}L${x} ${y-2.1}L${x+1.9} ${y-.7}V${y+1.6}Z`} fill={fill} stroke={stroke} strokeWidth={strokeWidth}/><path d={`M${x-1.5} ${y-.2}H${x+1.5}`} stroke={color} strokeWidth=".55"/></>}
   </g>;
 }
 

@@ -3,6 +3,7 @@
 import type { ResourceCounts } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import { RESOURCE_KEYS_ORDERED } from "@/game/constants";
+import { ResourceIcon } from "./AssetIcon";
 
 export default function PlayerHand({
   resources,
@@ -23,7 +24,7 @@ export default function PlayerHand({
             className="min-w-0 rounded-xl border border-line/80 bg-cream/95 px-1.5 py-1 shadow-card"
           >
             <div className="flex items-center justify-center gap-1 leading-none">
-              <span className="text-base" aria-hidden="true">{style.icon}</span>
+              <ResourceIcon resource={key} className="h-5 w-5" />
               <span className="text-sm font-black tabular-nums text-ink">{amount}</span>
             </div>
             <span className="mt-0.5 block truncate text-center text-[8px] font-bold uppercase leading-none tracking-wide text-ink-soft">

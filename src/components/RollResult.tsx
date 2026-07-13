@@ -2,6 +2,8 @@
 
 import type { GameState, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
+import { ResourceIcon, AssetIcon } from "./AssetIcon";
+import { pieceAsset } from "@/game/assets";
 import { PLAYER_COLORS } from "@/game/constants";
 
 const PIPS: Record<number, [number, number][]> = {
@@ -132,7 +134,7 @@ export default function RollResult({ G, theme, displayName, onContinue }: RollRe
           </p>
           {sum === 7 ? (
             <p className="text-sm text-ink">
-              {theme.bandit.icon} The {theme.bandit.label.toLowerCase()} rides — no
+              <AssetIcon src={pieceAsset(theme, "bandit")} className="mr-1 h-6 w-6" /> The {theme.bandit.label.toLowerCase()} rides — no
               production. Move it to a new tile.
             </p>
           ) : gains.length === 0 ? (
@@ -149,7 +151,7 @@ export default function RollResult({ G, theme, displayName, onContinue }: RollRe
                   <span className="text-ink">
                     {(Object.entries(res) as [ResourceKey, number][]).map(([key, n]) => (
                       <span key={key} className="ml-1.5">
-                        +{n} {theme.resources[key].icon}
+                        +{n} <ResourceIcon resource={key} className="h-5 w-5" />
                       </span>
                     ))}
                   </span>

@@ -8,12 +8,13 @@ import type { Group, Object3D, Texture } from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import type { Board, Building, ResourceKey, TileResource } from "@/types/game";
 import type { ResourceTheme, Theme } from "@/types/theme";
-import { PLAYER_COLORS, RESOURCE_KEYS_ORDERED } from "@/game/constants";
+import { RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import { buildGeometry, HEX_SIZE } from "@/game/geometry";
 import { deriveHarbors } from "@/game/harbors";
 import { tokenTexture } from "./board3d/tokenTexture";
 import { harborTexture } from "./board3d/harborTexture";
 import { WaterSurface } from "./board3d/WaterSurface";
+import { knightAsset, pieceAsset } from "@/game/assets";
 
 /** Bundled tile art (or a theme's own image) resolved the same way HexBoardPlay
  *  resolves it: an absolute image URL wins, else the bundled SVG under the
@@ -270,6 +271,8 @@ interface HexBoard3DProps {
   buildings?: Record<string, Building>;
   roads?: Record<string, string>;
   knights?: Record<string, string>;
+  activeKnights?: Record<string, boolean>;
+  knightLevels?: Record<string, number>;
   banditTile?: number | null;
   highlightVertices?: string[];
   highlightEdges?: string[];
@@ -286,6 +289,8 @@ export default function HexBoard3D({
   buildings = {},
   roads = {},
   knights = {},
+  activeKnights = {},
+  knightLevels = {},
   banditTile = null,
   highlightVertices = [],
   highlightEdges = [],
@@ -323,6 +328,15 @@ export default function HexBoard3D({
     return [...urls];
   }, [theme]);
   const artTextures = useTileArtTextures(artUrls);
+
+  const pieceUrls = useMemo(() => {
+    const urls = new Set<string>([pieceAsset(theme, "bandit"), pieceAsset(theme, "harbor_dock")]);
+    Object.values(roads).forEach((player) => urls.add(pieceAsset(theme, "road", player)));
+    Object.values(buildings).forEach((building) => urls.add(pieceAsset(theme, building.city ? "city" : "settlement", building.player)));
+    Object.entries(knights).forEach(([vertexId, player]) => urls.add(knightAsset(theme, player, knightLevels[vertexId] ?? 1, activeKnights[vertexId] ?? false)));
+    return [...urls];
+  }, [theme, roads, buildings, knights, knightLevels, activeKnights]);
+  const pieceTextures = useTileArtTextures(pieceUrls);
 
   // Recenter the board on the origin using its bounding box.
   const { cx, cz } = useMemo(() => {
@@ -479,6 +493,7 @@ export default function HexBoard3D({
             sub={h.sub}
             icon={h.icon}
             onHover={(over) => setHarborTip(over ? h.tip : null)}
+            dockTexture={pieceTextures[pieceAsset(theme, "harbor_dock")]}
           />
         ))}
 
@@ -539,9 +554,9 @@ export default function HexBoard3D({
                 </mesh>
               )}
 
-              <Decor resource={tile.resource} seed={tile.id} top={h} treeAsset={treeAsset} />
+              {!artTexture && <Decor resource={tile.resource} seed={tile.id} top={h} treeAsset={treeAsset} />}
 
-              {banditTile === tile.id && <Bandit top={h} />}
+              {banditTile === tile.id && <SpritePiece texture={pieceTextures[pieceAsset(theme, "bandit")]} position={[0, h + 0.42, 0]} scale={[0.72, 0.72]} />}
             </group>
           );
         })}
@@ -555,7 +570,7 @@ export default function HexBoard3D({
           const [ax, az] = world(a.x, a.y);
           const [bx, bz] = world(b.x, b.y);
           const y = Math.min(vertexY[a.id], vertexY[b.id]) + 0.02;
-          return <RoadMesh key={edgeId} ax={ax} az={az} bx={bx} bz={bz} y={y} color={PLAYER_COLORS[Number(player)]} />;
+          return <RoadSprite key={edgeId} ax={ax} az={az} bx={bx} bz={bz} y={y + 0.18} texture={pieceTextures[pieceAsset(theme, "road", player)]} />;
         })}
 
         {/* Ghost roads for placeable edges. */}
@@ -590,15 +605,27 @@ export default function HexBoard3D({
           const [x, z] = world(v.x, v.y);
           const clickable = hv.has(vertexId) && !!onVertexTap;
           return (
-            <BuildingMesh
+            <SpritePiece
               key={vertexId}
-              x={x}
-              z={z}
-              y={vertexY[vertexId]}
-              color={PLAYER_COLORS[Number(building.player)]}
-              city={building.city}
-              hasKnight={!!knights[vertexId]}
+              texture={pieceTextures[pieceAsset(theme, building.city ? "city" : "settlement", building.player)]}
+              position={[x, vertexY[vertexId] + (building.city ? 0.4 : 0.32), z]}
+              scale={building.city ? [0.82, 0.82] : [0.66, 0.66]}
               onClick={clickable ? tap(() => onVertexTap!(vertexId)) : undefined}
+            />
+          );
+        })}
+
+        {/* Cities & Knights sprites are independent pieces and reflect owner, level and activation state. */}
+        {Object.entries(knights).map(([vertexId, player]) => {
+          const v = geo.vertices[vertexId];
+          if (!v) return null;
+          const [x, z] = world(v.x, v.y);
+          return (
+            <SpritePiece
+              key={`knight-${vertexId}`}
+              texture={pieceTextures[knightAsset(theme, player, knightLevels[vertexId] ?? 1, activeKnights[vertexId] ?? false)]}
+              position={[x + 0.22, vertexY[vertexId] + 0.35, z + 0.12]}
+              scale={[0.58, 0.58]}
             />
           );
         })}
@@ -629,6 +656,35 @@ export default function HexBoard3D({
 function cornerlessCenter(q: number, r: number): [number, number] {
   const SQRT3 = Math.sqrt(3);
   return [HEX_SIZE * SQRT3 * (q + r / 2), HEX_SIZE * 1.5 * r];
+}
+
+function SpritePiece({
+  texture,
+  position,
+  scale,
+  onClick,
+}: {
+  texture?: Texture;
+  position: [number, number, number];
+  scale: [number, number];
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+}) {
+  if (!texture) return null;
+  return (
+    <sprite position={position} scale={[scale[0], scale[1], 1]} onClick={onClick}>
+      <spriteMaterial map={texture} transparent alphaTest={0.03} depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
+}
+
+function RoadSprite({ ax, az, bx, bz, y, texture }: { ax: number; az: number; bx: number; bz: number; y: number; texture?: Texture }) {
+  if (!texture) return null;
+  const angle = Math.atan2(bz - az, bx - ax);
+  return (
+    <sprite position={[(ax + bx) / 2, y, (az + bz) / 2]} scale={[0.86, 0.43, 1]}>
+      <spriteMaterial map={texture} rotation={-angle} transparent alphaTest={0.03} depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
 }
 
 function RoadMesh({
@@ -670,62 +726,6 @@ function RoadMesh({
   );
 }
 
-function BuildingMesh({
-  x,
-  z,
-  y,
-  color,
-  city,
-  hasKnight,
-  onClick,
-}: {
-  x: number;
-  z: number;
-  y: number;
-  color: string;
-  city: boolean;
-  hasKnight: boolean;
-  onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}) {
-  return (
-    <group position={[x, y, z]} onClick={onClick}>
-      {city ? (
-        <>
-          <mesh position={[0, 0.13, 0]} castShadow>
-            <boxGeometry args={[0.34, 0.26, 0.34]} />
-            <meshStandardMaterial color={color} roughness={0.5} metalness={0.15} />
-          </mesh>
-          <mesh position={[0.02, 0.36, 0.02]} castShadow>
-            <boxGeometry args={[0.2, 0.22, 0.2]} />
-            <meshStandardMaterial color={color} roughness={0.5} metalness={0.15} />
-          </mesh>
-          <mesh position={[0.02, 0.52, 0.02]} castShadow>
-            <coneGeometry args={[0.17, 0.16, 4]} />
-            <meshStandardMaterial color={color} roughness={0.5} metalness={0.15} />
-          </mesh>
-        </>
-      ) : (
-        <>
-          <mesh position={[0, 0.11, 0]} castShadow>
-            <boxGeometry args={[0.26, 0.2, 0.26]} />
-            <meshStandardMaterial color={color} roughness={0.55} metalness={0.12} />
-          </mesh>
-          <mesh position={[0, 0.28, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-            <coneGeometry args={[0.22, 0.16, 4]} />
-            <meshStandardMaterial color={color} roughness={0.55} metalness={0.12} />
-          </mesh>
-        </>
-      )}
-      {hasKnight && (
-        <mesh position={[0.24, 0.24, 0.24]} castShadow>
-          <sphereGeometry args={[0.09, 12, 12]} />
-          <meshStandardMaterial color="#f8d66d" roughness={0.35} metalness={0.5} emissive="#7c5a06" emissiveIntensity={0.2} />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
 function VertexMarker({ x, z, y, onClick }: { x: number; z: number; y: number; onClick?: (e: ThreeEvent<MouseEvent>) => void }) {
   const ring = useRef<Group>(null);
   // Gentle bob + breathing scale so valid moves read as "alive" without noise.
@@ -755,21 +755,6 @@ function VertexMarker({ x, z, y, onClick }: { x: number; z: number; y: number; o
   );
 }
 
-function Bandit({ top }: { top: number }) {
-  return (
-    <group position={[0, top, 0]}>
-      <mesh position={[0, 0.16, 0]} castShadow>
-        <cylinderGeometry args={[0.12, 0.16, 0.32, 12]} />
-        <meshStandardMaterial color="#1b2431" roughness={0.6} metalness={0.2} />
-      </mesh>
-      <mesh position={[0, 0.38, 0]} castShadow>
-        <sphereGeometry args={[0.11, 14, 14]} />
-        <meshStandardMaterial color="#111826" roughness={0.5} metalness={0.25} />
-      </mesh>
-    </group>
-  );
-}
-
 function Harbor({
   mx,
   mz,
@@ -778,6 +763,7 @@ function Harbor({
   sub,
   icon,
   onHover,
+  dockTexture,
 }: {
   mx: number;
   mz: number;
@@ -786,6 +772,7 @@ function Harbor({
   sub?: string;
   icon?: string;
   onHover?: (over: boolean) => void;
+  dockTexture?: Texture;
 }) {
   const d = Math.hypot(mx, mz) || 1;
   const nx = mx / d;
@@ -801,8 +788,9 @@ function Harbor({
       onPointerOver={(e) => { e.stopPropagation(); onHover?.(true); }}
       onPointerOut={(e) => { e.stopPropagation(); onHover?.(false); }}
     >
+      {dockTexture && <SpritePiece texture={dockTexture} position={[0.28, 0.24, 0]} scale={[0.86, 0.62]} />}
       {/* Dock plank + mooring posts. */}
-      <mesh position={[0.2, 0.04, 0]} castShadow receiveShadow>
+      <mesh position={[0.2, 0.04, 0]} castShadow receiveShadow visible={!dockTexture}>
         <boxGeometry args={[0.5, 0.05, 0.22]} />
         <meshStandardMaterial color="#8a5a34" roughness={0.8} />
       </mesh>

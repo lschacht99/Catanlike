@@ -12,6 +12,8 @@ export interface BoardStageProps {
   buildings?: Record<string, Building>;
   roads?: Record<string, string>;
   knights?: Record<string, string>;
+  activeKnights?: Record<string, boolean>;
+  knightLevels?: Record<string, number>;
   banditTile?: number | null;
   highlightVertices?: string[];
   highlightEdges?: string[];

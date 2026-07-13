@@ -6,11 +6,11 @@ import type { Theme } from "@/types/theme";
 import type { HarborType, TradeCard } from "@/game/harbors";
 import {
   BANK_TRADE_RATE,
-  COMMODITY_ICONS,
   COMMODITY_KEYS_ORDERED,
   COMMODITY_LABELS,
   RESOURCE_KEYS_ORDERED,
 } from "@/game/constants";
+import { ResourceIcon, CommodityIcon } from "./AssetIcon";
 import Sheet from "./Sheet";
 
 /** Only PUBLIC information about a rival is passed in — never their hand. */
@@ -87,8 +87,8 @@ export default function TradePanel({
     rateFor ? rateFor(card) : BANK_TRADE_RATE;
   const label = (card: TradeCard): string =>
     isCommodityCard(card) ? COMMODITY_LABELS[card] : theme.resources[card as ResourceKey].label;
-  const icon = (card: TradeCard): string =>
-    isCommodityCard(card) ? COMMODITY_ICONS[card] : theme.resources[card as ResourceKey].icon;
+  const icon = (card: TradeCard): React.ReactNode =>
+    isCommodityCard(card) ? <CommodityIcon commodity={card} className="h-6 w-6" /> : <ResourceIcon resource={card as ResourceKey} className="h-6 w-6" />;
 
   const giveRate = give ? rate(give) : BANK_TRADE_RATE;
   const canBankConfirm =
@@ -196,7 +196,7 @@ export default function TradePanel({
                   active ? "border-ink bg-ink/10" : "border-line bg-cream"
                 }`}
               >
-                <span className="text-lg">{style.icon}</span>
+                <ResourceIcon resource={key} className="h-7 w-7" />
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-ink-soft">{style.label}</span>
               </button>
             );

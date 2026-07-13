@@ -98,7 +98,7 @@ export default function GameBoard({
     instruction = "Roll the dice";
   } else if (G.mustMoveBandit) {
     highlightTiles = validBanditTiles(G);
-    instruction = `Move the ${theme.bandit.label.toLowerCase()} ${theme.bandit.icon}`;
+    instruction = `Move the ${theme.bandit.label.toLowerCase()}`;
   } else if (G.freeRoads > 0 && buildMode !== "road") {
     instruction = `${G.freeRoads} free ${theme.terms.road.toLowerCase()}${G.freeRoads > 1 ? "s" : ""} — open Build`;
   } else if (buildMode === "road") {
@@ -202,6 +202,9 @@ export default function GameBoard({
             theme={theme}
             buildings={G.buildings}
             roads={G.roads}
+            knights={G.knights}
+            activeKnights={G.activeKnights ?? {}}
+            knightLevels={G.knightLevels ?? {}}
             banditTile={G.banditTile}
             highlightVertices={highlightVertices}
             highlightEdges={highlightEdges}

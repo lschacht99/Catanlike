@@ -2,6 +2,7 @@
 
 import type { TradeOffer, TradeResult } from "@/types/game";
 import type { Theme } from "@/types/theme";
+import { ResourceIcon } from "./AssetIcon";
 
 /**
  * The trade target's private accept/refuse view. It shows only the offer terms
@@ -39,13 +40,13 @@ export function TradeReview({
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <p className="text-[11px] uppercase tracking-wide text-white/45">You give</p>
             <p className="mt-1 text-xl font-black">
-              {offer.receiveAmount} {giveStyle.icon} {giveStyle.label}
+              {offer.receiveAmount} <ResourceIcon resource={offer.receive} className="h-6 w-6" /> {giveStyle.label}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <p className="text-[11px] uppercase tracking-wide text-white/45">You receive</p>
             <p className="mt-1 text-xl font-black">
-              {offer.giveAmount} {getStyle.icon} {getStyle.label}
+              {offer.giveAmount} <ResourceIcon resource={offer.give} className="h-6 w-6" /> {getStyle.label}
             </p>
           </div>
         </div>
@@ -79,7 +80,6 @@ export function TradeReview({
 /** Public result banner shown to both players after a trade is resolved. */
 export function TradeResultBanner({
   result,
-  theme,
   proposerName,
   responderName,
   onDismiss,
@@ -91,16 +91,14 @@ export function TradeResultBanner({
   onDismiss: () => void;
 }) {
   const { offer, accepted, reason } = result;
-  const give = theme.resources[offer.give];
-  const receive = theme.resources[offer.receive];
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/90 p-6">
       <div className="w-full max-w-sm rounded-3xl border border-white/12 bg-slate-900 p-6 text-center text-white shadow-2xl">
         <p className="text-4xl">{accepted ? "🤝" : "🚫"}</p>
         <h2 className="mt-2 text-xl font-black">{accepted ? "Trade accepted" : "Trade refused"}</h2>
         <p className="mt-2 text-sm text-white/65">
-          {proposerName} → {responderName}: {offer.giveAmount} {give.icon} for {offer.receiveAmount}{" "}
-          {receive.icon}
+          {proposerName} → {responderName}: {offer.giveAmount} <ResourceIcon resource={offer.give} className="h-5 w-5" /> for {offer.receiveAmount}{" "}
+          <ResourceIcon resource={offer.receive} className="h-5 w-5" />
         </p>
         {reason && <p className="mt-1 text-xs text-white/45">{reason}</p>}
         <button

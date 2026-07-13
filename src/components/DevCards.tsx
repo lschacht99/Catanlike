@@ -6,6 +6,8 @@ import type { Theme } from "@/types/theme";
 import { RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import { playableDevCardIndex } from "@/game/rules";
 import Sheet from "./Sheet";
+import { ResourceIcon, AssetIcon } from "./AssetIcon";
+import { gameAsset } from "@/game/assets";
 
 export const DEV_CARD_INFO: Record<DevCardType, { label: string; icon: string; desc: string }> = {
   knight: { label: "Knight", icon: "🛡️", desc: "Move the bandit and steal a card." },
@@ -30,12 +32,10 @@ interface DevCardsSheetProps {
 }
 
 function ResourcePicker({
-  theme,
   count,
   onConfirm,
   onCancel,
 }: {
-  theme: Theme;
   count: 1 | 2;
   onConfirm: (picks: ResourceKey[]) => void;
   onCancel: () => void;
@@ -53,7 +53,7 @@ function ResourcePicker({
             onClick={() => setPicks((p) => (p.length < count ? [...p, key] : p))}
             className="flex flex-col items-center rounded-xl border border-line bg-cream py-2"
           >
-            <span className="text-lg">{theme.resources[key].icon}</span>
+            <ResourceIcon resource={key} className="h-7 w-7" />
             <span className="text-[9px] text-ink-soft">
               {picks.filter((p) => p === key).length || ""}
             </span>
@@ -121,7 +121,7 @@ export default function DevCardsSheet({
                 className="flex items-center gap-3 rounded-2xl border border-line bg-cream p-3 shadow-card"
               >
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-parchment text-xl">
-                  {info.icon}
+                  <AssetIcon src={gameAsset(`05_UI_ICONS/development_progress/dev_${type === "roadBuilding" ? "road_building" : type === "yearOfPlenty" ? "year_of_plenty" : type}.png`)} className="h-9 w-9" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold uppercase tracking-wider text-ink">
@@ -164,7 +164,6 @@ export default function DevCardsSheet({
       {picking && (
         <div className="mt-3">
           <ResourcePicker
-            theme={theme}
             count={picking === "yearOfPlenty" ? 2 : 1}
             onCancel={() => setPicking(null)}
             onConfirm={(picks) => {

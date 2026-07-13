@@ -3,7 +3,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import type { Board, Building } from "@/types/game";
 import type { Theme } from "@/types/theme";
-import { PLAYER_COLORS, TOKEN_PIPS } from "@/game/constants";
+import { numberTokenAsset, pieceAsset, knightAsset } from "@/game/assets";
 import { buildGeometry, hexCenter, hexCorners } from "@/game/geometry";
 import TileArt, { shade } from "./TileArt";
 
@@ -12,6 +12,9 @@ interface HexBoardProps {
   theme: Theme;
   buildings?: Record<string, Building>;
   roads?: Record<string, string>;
+  knights?: Record<string, string>;
+  activeKnights?: Record<string, boolean>;
+  knightLevels?: Record<string, number>;
   banditTile?: number | null;
   /** Valid tap targets, rendered as pulsing markers. */
   highlightVertices?: string[];
@@ -36,6 +39,9 @@ export default function HexBoard({
   theme,
   buildings = EMPTY_BUILDINGS,
   roads = EMPTY_ROADS,
+  knights = {},
+  activeKnights = {},
+  knightLevels = {},
   banditTile = null,
   highlightVertices = [],
   highlightEdges = [],
@@ -160,7 +166,6 @@ export default function HexBoard({
             const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
             const artHref =
               style.image ?? (style.tileArt ? `${basePath}${style.tileArt}` : undefined);
-            const hot = tile.token === 6 || tile.token === 8;
             const targetable = highlightTileSet.has(tile.id);
             const sidePoints = corners
               .map((p) => `${p.x},${p.y + TILE_DEPTH}`)
@@ -200,31 +205,7 @@ export default function HexBoard({
                   strokeWidth={targetable ? 1 : 0.7}
                   className={targetable ? "animate-pulse" : undefined}
                 />
-                {tile.token !== null && (
-                  <g className="pointer-events-none">
-                    <circle cx={cx} cy={cy + 1.8} r="3.4" fill="#faf5e9" stroke="#b9a77f" strokeWidth="0.3" />
-                    <text
-                      x={cx}
-                      y={cy + 3.2}
-                      textAnchor="middle"
-                      fontSize="3.8"
-                      fontWeight="700"
-                      fill={hot ? "#b0341f" : "#1e3a5f"}
-                    >
-                      {tile.token}
-                    </text>
-                    <g fill={hot ? "#b0341f" : "#1e3a5f"}>
-                      {Array.from({ length: TOKEN_PIPS[tile.token] ?? 0 }).map((_, i, arr) => (
-                        <circle
-                          key={i}
-                          cx={cx + (i - (arr.length - 1) / 2) * 0.9}
-                          cy={cy + 4.4}
-                          r="0.3"
-                        />
-                      ))}
-                    </g>
-                  </g>
-                )}
+                {tile.token !== null && <image className="pointer-events-none" href={numberTokenAsset(tile.token)} x={cx - 3.5} y={cy - 1.7} width="7" height="7" />}
               </g>
             );
           })}
@@ -244,10 +225,7 @@ export default function HexBoard({
                   }}
                 >
                   <g key={banditTile} className="bandit-hop">
-                    <ellipse cx="0" cy="2.6" rx="2.6" ry="0.8" fill="rgba(0,0,0,0.25)" />
-                    <text x="0" y="0.6" textAnchor="middle" fontSize="5.5">
-                      {theme.bandit.icon}
-                    </text>
+                    <image href={pieceAsset(theme, "bandit")} x="-4.2" y="-5.5" width="8.4" height="8.4" />
                   </g>
                 </g>
               );
@@ -259,19 +237,10 @@ export default function HexBoard({
             if (!edge) return null;
             const a = geometry.vertices[edge.a];
             const b = geometry.vertices[edge.b];
-            return (
-              <line
-                key={edgeId}
-                x1={a.x + (b.x - a.x) * 0.18}
-                y1={a.y + (b.y - a.y) * 0.18}
-                x2={a.x + (b.x - a.x) * 0.82}
-                y2={a.y + (b.y - a.y) * 0.82}
-                stroke={PLAYER_COLORS[Number(player)]}
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                className="pointer-events-none piece-pop"
-              />
-            );
+            const mx = (a.x + b.x) / 2;
+            const my = (a.y + b.y) / 2;
+            const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+            return <image key={edgeId} href={pieceAsset(theme, "road", player)} x={mx - 4.5} y={my - 2.25} width="9" height="4.5" transform={`rotate(${angle} ${mx} ${my})`} className="pointer-events-none piece-pop" />;
           })}
 
           {/* Edge tap targets */}
@@ -306,22 +275,26 @@ export default function HexBoard({
           {Object.entries(buildings).map(([vertexId, building]) => {
             const v = geometry.vertices[vertexId];
             if (!v) return null;
-            const color = PLAYER_COLORS[Number(building.player)];
             const clickable = highlightVertexSet.has(vertexId) && onVertexTap;
-            const shape = building.city
-              ? `${v.x - 2.6},${v.y + 1.9} ${v.x - 2.6},${v.y - 1.1} ${v.x - 1.3},${v.y - 2.4} ${v.x},${v.y - 1.1} ${v.x + 2.6},${v.y - 1.1} ${v.x + 2.6},${v.y + 1.9}`
-              : `${v.x - 1.8},${v.y + 1.6} ${v.x - 1.8},${v.y - 0.6} ${v.x},${v.y - 2} ${v.x + 1.8},${v.y - 0.6} ${v.x + 1.8},${v.y + 1.6}`;
+            const size = building.city ? 8.8 : 7.1;
             return (
-              <polygon
+              <image
                 key={`${vertexId}-${building.city ? "c" : "s"}`}
-                points={shape}
-                fill={color}
-                stroke={clickable ? "#b45a37" : "#faf5e9"}
-                strokeWidth={clickable ? 0.7 : 0.45}
+                href={pieceAsset(theme, building.city ? "city" : "settlement", building.player)}
+                x={v.x - size / 2}
+                y={v.y - size * 0.68}
+                width={size}
+                height={size}
                 onClick={tap(clickable ? () => onVertexTap(vertexId) : undefined)}
                 className={clickable ? "cursor-pointer animate-pulse piece-pop" : "piece-pop"}
               />
             );
+          })}
+
+          {Object.entries(knights).map(([vertexId, player]) => {
+            const v = geometry.vertices[vertexId];
+            if (!v) return null;
+            return <image key={`knight-${vertexId}`} href={knightAsset(theme, player, knightLevels[vertexId] ?? 1, activeKnights[vertexId] ?? false)} x={v.x + 0.6} y={v.y - 5.6} width="6.3" height="6.3" className="pointer-events-none piece-pop" />;
           })}
 
           {/* Vertex tap targets (empty spots) */}

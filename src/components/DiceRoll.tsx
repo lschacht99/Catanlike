@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { ProgressTrackKey } from "@/types/game";
-import { COMMODITY_ICONS, TRACK_COMMODITY } from "@/game/constants";
+import { TRACK_COMMODITY } from "@/game/constants";
+import { commodityIconAsset, gameAsset } from "@/game/assets";
 import { faceGrid } from "./dice-faces";
 
 /**
@@ -23,10 +24,10 @@ function Die({ value, spinDelay }: { value: number; spinDelay: number }) {
 /** Cities & Knights' third die: a raider skull, or the commodity that track's
  *  progress cards deal in — never one icon standing in for all three tracks. */
 const EVENT_DIE_ICON: Record<"barbarian" | ProgressTrackKey, string> = {
-  barbarian: "☠️",
-  trade: COMMODITY_ICONS[TRACK_COMMODITY.trade],
-  politics: COMMODITY_ICONS[TRACK_COMMODITY.politics],
-  science: COMMODITY_ICONS[TRACK_COMMODITY.science],
+  barbarian: gameAsset("06_TOKENS/dice_numbers/event_barbarian.png"),
+  trade: commodityIconAsset(TRACK_COMMODITY.trade),
+  politics: commodityIconAsset(TRACK_COMMODITY.politics),
+  science: commodityIconAsset(TRACK_COMMODITY.science),
 };
 
 const EVENT_DIE_LABEL: Record<"barbarian" | ProgressTrackKey, string> = {
@@ -73,7 +74,7 @@ export default function DiceRoll({
         <Die value={faces[1]} spinDelay={90} />
         {eventDie != null && (
           <div className="event-die" role="img" aria-label={EVENT_DIE_LABEL[eventDie]} title={EVENT_DIE_LABEL[eventDie]}>
-            {EVENT_DIE_ICON[eventDie]}
+            <img src={EVENT_DIE_ICON[eventDie]} alt="" className="h-full w-full object-contain" draggable={false} />
           </div>
         )}
       </div>

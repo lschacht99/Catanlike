@@ -10,6 +10,8 @@ import {
 } from "@/game/constants";
 import { canAfford, canBuyDevCard, pieceCounts } from "@/game/rules";
 import Sheet from "./Sheet";
+import { ResourceIcon, AssetIcon } from "./AssetIcon";
+import { buildIconAsset, gameAsset } from "@/game/assets";
 
 interface Pieces {
   roads: number;
@@ -37,12 +39,12 @@ interface BuildMenuProps {
   includeKnights?: boolean;
 }
 
-function Costs({ cost, theme }: { cost: Partial<Record<ResourceKey, number>>; theme: Theme }) {
+function Costs({ cost }: { cost: Partial<Record<ResourceKey, number>> }) {
   return (
     <span className="flex flex-wrap gap-x-1.5 gap-y-0.5">
       {(Object.entries(cost) as [ResourceKey, number][]).map(([key, amount]) => (
         <span key={key} className="text-xs text-ink-soft">
-          {theme.resources[key].icon}
+          <ResourceIcon resource={key} className="h-4 w-4" />
           {amount > 1 ? `×${amount}` : ""}
         </span>
       ))}
@@ -58,7 +60,7 @@ function SheetRow({
   disabled,
   onClick,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   sub: string;
   costs: React.ReactNode;
@@ -109,19 +111,19 @@ export default function BuildMenu({
 
   const items: {
     kind: BuildableKind;
-    icon: string;
+    icon: React.ReactNode;
     label: string;
     used: number;
     max: number;
   }[] = [
-    { kind: "road", icon: "🛤️", label: theme.terms.road, used: pieces.roads, max: PIECE_LIMITS.road },
-    { kind: "settlement", icon: "🏠", label: theme.terms.settlement, used: pieces.settlements, max: PIECE_LIMITS.settlement },
-    { kind: "city", icon: "🏛️", label: theme.terms.city, used: pieces.cities, max: PIECE_LIMITS.city },
+    { kind: "road", icon: <AssetIcon src={buildIconAsset("road")} className="h-9 w-9" />, label: theme.terms.road, used: pieces.roads, max: PIECE_LIMITS.road },
+    { kind: "settlement", icon: <AssetIcon src={buildIconAsset("settlement")} className="h-9 w-9" />, label: theme.terms.settlement, used: pieces.settlements, max: PIECE_LIMITS.settlement },
+    { kind: "city", icon: <AssetIcon src={buildIconAsset("city")} className="h-9 w-9" />, label: theme.terms.city, used: pieces.cities, max: PIECE_LIMITS.city },
   ];
   if (includeKnights) {
     items.push({
       kind: "knight",
-      icon: "🛡️",
+      icon: <AssetIcon src={buildIconAsset("knight")} className="h-9 w-9" />,
       label: knightTerm,
       used: pieces.knights ?? 0,
       max: PIECE_LIMITS.knight,
@@ -137,7 +139,7 @@ export default function BuildMenu({
   if (!onClose) {
     return (
       <div className={`grid gap-1.5 ${items.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
-        {items.map(({ kind, label, used, max }) => {
+        {items.map(({ kind, icon, label, used, max }) => {
           const active = activeMode === kind;
           return (
             <button
@@ -150,8 +152,9 @@ export default function BuildMenu({
                   : "border-white/15 bg-white/5 text-white"
               }`}
             >
+              <span className="mb-0.5 h-7 w-7">{icon}</span>
               <span>{label}</span>
-              <Costs cost={BUILD_COSTS[kind]} theme={theme} />
+              <Costs cost={BUILD_COSTS[kind]} />
               <span className="text-[10px] opacity-60">{max - used} left</span>
             </button>
           );
@@ -174,7 +177,7 @@ export default function BuildMenu({
               kind === "road" && freeRoads > 0 ? (
                 <span className="text-xs font-bold text-olive">Free (Road Building)</span>
               ) : (
-                <Costs cost={BUILD_COSTS[kind]} theme={theme} />
+                <Costs cost={BUILD_COSTS[kind]} />
               )
             }
             disabled={!enabled(kind)}
@@ -183,10 +186,10 @@ export default function BuildMenu({
         ))}
         {G && player && onBuyDevCard && (
           <SheetRow
-            icon="🃏"
+            icon={<AssetIcon src={gameAsset("05_UI_ICONS/development_progress/dev_knight.png")} className="h-9 w-9" />}
             label="Journey Card"
             sub={`${G.devDeck.length} left in the deck`}
-            costs={<Costs cost={DEV_CARD_COST} theme={theme} />}
+            costs={<Costs cost={DEV_CARD_COST} />}
             disabled={!canBuyDevCard(G, player)}
             onClick={onBuyDevCard}
           />

@@ -2,6 +2,7 @@
 
 import type { TradeOffer } from "@/types/game";
 import type { Theme } from "@/types/theme";
+import { ResourceIcon } from "./AssetIcon";
 import type { OnlineTradeRole } from "@/game/onlineTrade";
 
 /**
@@ -64,7 +65,7 @@ export default function OnlineTradePanel({
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-white/45">Waiting for {responderName}</p>
             <p className="mt-2 text-sm text-white/75">
-              You offered {offer.giveAmount} {giveStyle.icon} {giveStyle.label} for {offer.receiveAmount} {receiveStyle.icon}{" "}
+              You offered {offer.giveAmount} <ResourceIcon resource={offer.give} className="h-5 w-5" /> {giveStyle.label} for {offer.receiveAmount} <ResourceIcon resource={offer.receive} className="h-5 w-5" />{" "}
               {receiveStyle.label}.
             </p>
             <p className="mt-1 text-xs text-white/45">Keep playing — you can build, roll, or trade with the bank while you wait.</p>
@@ -88,13 +89,13 @@ export default function OnlineTradePanel({
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-white/45">You give</p>
                 <p className="mt-1 text-lg font-black text-white">
-                  {offer.receiveAmount} {receiveStyle.icon} {receiveStyle.label}
+                  {offer.receiveAmount} <ResourceIcon resource={offer.receive} className="h-6 w-6" /> {receiveStyle.label}
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-white/45">You receive</p>
                 <p className="mt-1 text-lg font-black text-white">
-                  {offer.giveAmount} {giveStyle.icon} {giveStyle.label}
+                  {offer.giveAmount} <ResourceIcon resource={offer.give} className="h-6 w-6" /> {giveStyle.label}
                 </p>
               </div>
             </div>

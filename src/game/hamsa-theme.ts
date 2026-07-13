@@ -1,4 +1,5 @@
 import type { Theme } from "@/types/theme";
+import { terrainAsset } from "./assets";
 
 export const HAMSA_THEME: Theme = {
   id: "hamsa",
@@ -8,35 +9,35 @@ export const HAMSA_THEME: Theme = {
       label: "Olive Route",
       color: "#758b49",
       icon: "🫒",
-      tileArt: "/hex-olive-route.svg",
+      tileArt: terrainAsset("hamsa", "wood"),
       tilePrompt: "olive grove route hex tile, warm Hamsa Nomads style",
     },
     brick: {
       label: "Terracotta Stop",
       color: "#b96a4a",
       icon: "🧱",
-      tileArt: "/hex-terracotta-stop.svg",
+      tileArt: terrainAsset("hamsa", "brick"),
       tilePrompt: "terracotta travel stop hex tile",
     },
     grain: {
       label: "Market Harvest",
       color: "#d9b54f",
       icon: "🌾",
-      tileArt: "/hex-market-harvest.svg",
+      tileArt: terrainAsset("hamsa", "grain"),
       tilePrompt: "golden market harvest hex tile",
     },
     wool: {
       label: "Tent Weave",
       color: "#8aa67b",
       icon: "⛺",
-      tileArt: "/hex-tent-weave.svg",
+      tileArt: terrainAsset("hamsa", "wool"),
       tilePrompt: "nomad tent weaving hex tile",
     },
     ore: {
       label: "Compass Brass",
       color: "#7d7264",
       icon: "🧭",
-      tileArt: "/hex-compass-brass.svg",
+      tileArt: terrainAsset("hamsa", "ore"),
       tilePrompt: "brass compass workshop hex tile",
     },
   },
@@ -44,10 +45,11 @@ export const HAMSA_THEME: Theme = {
     label: "Passport Sands",
     color: "#d7be92",
     icon: "🧿",
-    tileArt: "/hex-passport-sands.svg",
+    tileArt: terrainAsset("hamsa", "desert"),
     tilePrompt: "passport stamp desert hex tile",
   },
   bandit: { label: "Lost Luggage", icon: "🧳" },
   terms: { road: "Route", settlement: "Camp", city: "Medina", knight: "Scout" },
   board: { sea: "#f6ecd9" },
+  assetSet: "hamsa",
 };

@@ -15,7 +15,6 @@ import type {
 import type { Theme } from "@/types/theme";
 import {
   CITIES_KNIGHTS_POINTS_TO_WIN,
-  COMMODITY_ICONS,
   COMMODITY_KEYS_ORDERED,
   COMMODITY_LABELS,
   PLAYER_COLORS,
@@ -43,6 +42,7 @@ import { BOT_DIFFICULTY_LABELS, canLocalDeviceControlSeat, isBotSeat, normalizeP
 import { saveSnapshot } from "@/lib/save-game";
 import { saveGame } from "@/lib/savegame";
 import BoardStage from "./BoardStage";
+import { CommodityIcon } from "./AssetIcon";
 import DiceRoll from "./DiceRoll";
 import PlayerHand from "./PlayerHand";
 import BuildMenu from "./BuildMenu";
@@ -314,7 +314,7 @@ export default function GameBoardPlay({
   } else if (!G.hasRolled) instruction = "Roll the dice";
   else if (G.mustMoveBandit) {
     highlightTiles = validBanditTiles(G);
-    instruction = `Move the ${theme.bandit.label.toLowerCase()} ${theme.bandit.icon}`;
+    instruction = `Move the ${theme.bandit.label.toLowerCase()}`;
   } else if (buildMode === "road") {
     highlightEdges = validRoadSpots(G, current, false);
     instruction = `Tap an edge to build a ${theme.terms.road.toLowerCase()}`;
@@ -427,7 +427,7 @@ export default function GameBoardPlay({
 
       <div className="relative z-10 min-h-0 flex-1 p-2 sm:p-3">
         <div className="board-card relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20 shadow-2xl">
-          <BoardStage board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
+          <BoardStage board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} activeKnights={G.activeKnights ?? {}} knightLevels={G.knightLevels ?? {}} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
           {instruction && <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/65 px-3 py-1.5 text-center text-xs font-semibold text-yellow-300 shadow-lg backdrop-blur">{instruction}</div>}
           {lastLog && <div className="pointer-events-none absolute bottom-3 left-3 max-w-[82%] rounded-xl bg-black/55 px-3 py-1.5 text-[11px] text-white/85 shadow-lg backdrop-blur">{lastLog}</div>}
         </div>
@@ -452,7 +452,7 @@ export default function GameBoardPlay({
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               {COMMODITY_KEYS_ORDERED.map((key) => (
                 <div key={key} className="flex flex-col items-center rounded-lg bg-black/20 px-1 py-1.5 leading-tight">
-                  <span className="text-base leading-none">{COMMODITY_ICONS[key]}</span>
+                  <CommodityIcon commodity={key} className="h-6 w-6" />
                   <span className="mt-0.5 text-[9px] uppercase tracking-wide text-white/50">{COMMODITY_LABELS[key]}</span>
                   <span className="text-sm font-bold text-white">{commodities[key]}</span>
                 </div>
@@ -635,4 +635,3 @@ export default function GameBoardPlay({
     </div>
   );
 }
-

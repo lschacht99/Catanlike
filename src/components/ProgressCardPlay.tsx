@@ -4,13 +4,13 @@ import { useState } from "react";
 import type { CommodityKey, ProgressCardType, ResourceKey } from "@/types/game";
 import type { Theme } from "@/types/theme";
 import {
-  COMMODITY_ICONS,
   COMMODITY_KEYS_ORDERED,
   COMMODITY_LABELS,
   PROGRESS_CARD_DESCRIPTIONS,
   PROGRESS_CARD_LABELS,
   RESOURCE_KEYS_ORDERED,
 } from "@/game/constants";
+import { ResourceIcon, CommodityIcon } from "./AssetIcon";
 
 export interface CardChoice {
   resources?: ResourceKey[];
@@ -38,7 +38,6 @@ export function cardNeedsChoice(card: ProgressCardType): boolean {
  */
 export default function ProgressCardPlay({
   card,
-  theme,
   rivals,
   onPlay,
   onCancel,
@@ -81,7 +80,7 @@ export default function ProgressCardPlay({
                   }
                   className="flex flex-col items-center rounded-xl border border-white/12 bg-white/5 py-2 text-lg"
                 >
-                  {theme.resources[r].icon}
+                  <ResourceIcon resource={r} className="h-7 w-7" />
                   <span className="text-[9px] text-white/50">
                     {resources.filter((x) => x === r).length || ""}
                   </span>
@@ -112,7 +111,7 @@ export default function ProgressCardPlay({
                   }
                   className="flex flex-col items-center gap-0.5 rounded-xl border border-white/12 bg-white/5 py-2 text-lg"
                 >
-                  <span className="leading-none">{COMMODITY_ICONS[c]}</span>
+                  <CommodityIcon commodity={c} className="h-7 w-7" />
                   <span className="text-[9px] text-white/50">
                     {COMMODITY_LABELS[c]}
                     {commodities.filter((x) => x === c).length ? ` ${commodities.filter((x) => x === c).length}` : ""}

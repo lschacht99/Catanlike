@@ -14,6 +14,8 @@ export interface ResourceTheme {
   image?: string;
   /** Bundled hex SVG asset path (relative to /public), used by HexBoardPlay. */
   tileArt?: string;
+  /** Transparent PNG used by compact UI chips and cards. */
+  iconArt?: string;
   /** Prompt reserved for future AI-generated tile art. */
   tilePrompt?: string;
 }
@@ -28,6 +30,8 @@ export interface Theme {
   terms: { road: string; settlement: string; city: string; knight: string };
   /** Board chrome colors. */
   board: { sea: string };
+  /** Folder in the bundled PNG library used for terrain and game pieces. */
+  assetSet?: "classic" | "hamsa" | "israel_landscape";
   /** True for user-created themes stored in localStorage. */
   custom?: boolean;
 }

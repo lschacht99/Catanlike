@@ -427,7 +427,7 @@ export default function GameBoardPlay({
 
       <div className="relative z-10 min-h-0 flex-1 p-2 sm:p-3">
         <div className="board-card relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20 shadow-2xl">
-          <BoardStage board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
+          <BoardStage board={G.board} theme={theme} buildings={G.buildings} roads={G.roads} knights={G.knights} activeKnights={G.activeKnights} knightLevels={G.knightLevels} banditTile={G.banditTile} highlightVertices={highlightVertices} highlightEdges={highlightEdges} highlightTiles={highlightTiles} onVertexTap={onVertexTap} onEdgeTap={onEdgeTap} onTileTap={onTileTap} className="h-full w-full" />
           {instruction && <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/65 px-3 py-1.5 text-center text-xs font-semibold text-yellow-300 shadow-lg backdrop-blur">{instruction}</div>}
           {lastLog && <div className="pointer-events-none absolute bottom-3 left-3 max-w-[82%] rounded-xl bg-black/55 px-3 py-1.5 text-[11px] text-white/85 shadow-lg backdrop-blur">{lastLog}</div>}
         </div>

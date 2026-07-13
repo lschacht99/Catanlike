@@ -31,4 +31,38 @@ if (await patch("src/game/moves.ts", (source) => {
   return source.replace(before, after);
 })) changed.push("moves");
 
+if (await patch("src/components/HexBoard3D.tsx", (source) => {
+  let next = source.replace(
+    'import type { Board, Building, ResourceKey, TileResource } from "@/types/game";',
+    'import type { Board, Building, TileResource } from "@/types/game";',
+  );
+  next = next.replace(
+    '  }, [urls.join("|")]);',
+    '  // URL contents, not array identity, control loading.\n  // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [urls.join("|")]);',
+  );
+  next = next.replace(
+    '  const geo = useMemo(() => buildGeometry(board.tiles), [boardKey]);',
+    '  // Online snapshots replace the array identity; boardKey tracks actual board content.\n  // eslint-disable-next-line react-hooks/exhaustive-deps\n  const geo = useMemo(() => buildGeometry(board.tiles), [boardKey]);',
+  );
+  next = next.replace(
+    '  }, [geo.vertices,boardKey]);',
+    '  // boardKey tracks tile content across serialized online snapshots.\n  // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [geo.vertices,boardKey]);',
+  );
+  next = next.replace(
+    '  }), [boardKey,world,theme]);',
+    '  // deriveHarbors depends on immutable board content represented by boardKey.\n  // eslint-disable-next-line react-hooks/exhaustive-deps\n  }), [boardKey,world,theme]);',
+  );
+  return next;
+})) changed.push("HexBoard3D");
+
+if (await patch("src/components/BoardStage.tsx", (source) => {
+  if (source.includes('}, [mode]);')) return source;
+  return source.replace('  }, []);', '  }, [mode]);');
+})) changed.push("BoardStage");
+
+if (await patch("src/components/DiceRoll.tsx", (source) => {
+  if (source.includes("eslint-disable-next-line react-hooks/exhaustive-deps")) return source;
+  return source.replace('  },[key]);', '  // A stable roll key intentionally controls the one-shot animation.\n  // eslint-disable-next-line react-hooks/exhaustive-deps\n  },[key]);');
+})) changed.push("DiceRoll");
+
 console.log(changed.length ? `Applied: ${changed.join(", ")}` : "Asset integration already applied.");

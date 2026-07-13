@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hamsa Nomads ore">
+<defs>
+<filter id="paper" x="-10%" y="-10%" width="120%" height="120%">
+  <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="19" result="n"/>
+  <feColorMatrix in="n" type="saturate" values="0" result="g"/>
+  <feComponentTransfer in="g" result="a"><feFuncA type="table" tableValues="0 .11"/></feComponentTransfer>
+  <feBlend in="SourceGraphic" in2="a" mode="multiply"/>
+</filter>
+<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F6F2E7"/><stop offset="1" stop-color="#756f66"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+<rect width="512" height="512" fill="url(#sky)"/>
+<rect width="512" height="512" fill="url(#sun)"/>
+<g filter="url(#paper)"><path d="M0 370L84 251l66 53 102-172 73 94 67-73 120 179V512H0Z" fill="#756f66" opacity=".9"/><path d="M84 251l66 53 102-172 73 94" fill="none" stroke="#F6F2E7" stroke-opacity=".45" stroke-width="13"/><polygon points="30,330 58,298 87,333 65,360" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="143,391 171,359 200,394 178,421" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="256,452 284,420 313,455 291,482" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="369,353 397,321 426,356 404,383" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="482,414 510,382 539,417 517,444" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="125,475 153,443 182,478 160,505" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="238,376 266,344 295,379 273,406" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="351,437 379,405 408,440 386,467" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="464,338 492,306 521,341 499,368" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><polygon points="107,399 135,367 164,402 142,429" fill="#5f6770" stroke="#F6F2E7" stroke-opacity=".35" stroke-width="4"/><g transform="translate(385 104)" fill="none" stroke="#c9a24a" stroke-width="8"><circle r="58"/><path d="M0-48V48M-48 0H48M-34-34L34 34M34-34L-34 34"/></g></g></svg>

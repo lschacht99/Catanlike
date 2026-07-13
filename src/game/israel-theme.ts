@@ -1,47 +1,55 @@
 import type { Theme } from "@/types/theme";
+import { GAME_ASSETS } from "./assets/assetManifest";
 
 export const ISRAEL_THEME: Theme = {
   id: "israel",
-  name: "Israel",
+  name: "Israel Landscape",
   resources: {
     wood: {
       label: "Olive Wood",
-      color: "#6f8f45",
+      color: "#708353",
       icon: "🫒",
+      tileArt: GAME_ASSETS.israel.terrain.wood,
       tilePrompt: "olive grove hex tile, Mediterranean board game style",
     },
     brick: {
       label: "Limestone",
-      color: "#c9a46a",
+      color: "#bda983",
       icon: "🧱",
+      tileArt: GAME_ASSETS.israel.terrain.brick,
       tilePrompt: "warm limestone quarry hex tile",
     },
     grain: {
       label: "Wheat",
-      color: "#d7ad34",
+      color: "#d1a342",
       icon: "🌾",
+      tileArt: GAME_ASSETS.israel.terrain.grain,
       tilePrompt: "golden wheat terrace hex tile",
     },
     wool: {
       label: "Goats",
-      color: "#76a66b",
+      color: "#81986d",
       icon: "🐐",
+      tileArt: GAME_ASSETS.israel.terrain.wool,
       tilePrompt: "green hillside goat pasture hex tile",
     },
     ore: {
       label: "Copper",
-      color: "#9c6b47",
+      color: "#b87047",
       icon: "⛏️",
-      tilePrompt: "copper mine hex tile, cinematic board game style",
+      tileArt: GAME_ASSETS.israel.terrain.ore,
+      tilePrompt: "copper mine and Negev rock hex tile",
     },
   },
   desert: {
-    label: "Desert",
-    color: "#d8b878",
+    label: "Negev",
+    color: "#d4b27b",
     icon: "🏜️",
-    tilePrompt: "soft desert dunes hex tile",
+    tileArt: GAME_ASSETS.israel.terrain.desert,
+    tilePrompt: "Negev sandstone, dunes and desert plants hex tile",
   },
   bandit: { label: "Wanderer", icon: "🦂" },
   terms: { road: "Trail", settlement: "Moshav", city: "Citadel", knight: "Guard" },
-  board: { sea: "#0b5f82" },
+  board: { sea: GAME_ASSETS.israel.water.deep },
+  visuals: GAME_ASSETS.israel,
 };

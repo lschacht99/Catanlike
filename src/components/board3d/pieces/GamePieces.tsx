@@ -18,7 +18,7 @@ export function RoadPiece({ ax, az, bx, bz, y, color, ghost = false, onClick }: 
   const len = Math.hypot(bx - ax, bz - az) * 0.72;
   const angle = Math.atan2(bz - az, bx - ax);
   return <group position={[(ax+bx)/2,y,(az+bz)/2]} rotation={[0,-angle,0]} onClick={onClick}>
-    <mesh position={[0,.025,0]} castShadow><boxGeometry args={[len,.09,.16]}/><meshStandardMaterial color={color} roughness={.72} metalness={.04} transparent={ghost} opacity={ghost?.55:1} emissive={ghost?"#f59e0b":"#000"} emissiveIntensity={ghost?.35:0}/></mesh>
+    <mesh position={[0,.025,0]} castShadow><boxGeometry args={[len,.09,.16]}/><meshStandardMaterial color={color} roughness={.72} metalness={.04} transparent={ghost} opacity={ghost ? .55 : 1} emissive={ghost ? "#f59e0b" : "#000"} emissiveIntensity={ghost ? .35 : 0}/></mesh>
     {!ghost && <mesh position={[0,.078,0]}><boxGeometry args={[len*.92,.018,.075]}/><meshStandardMaterial color="#F6F2E7" roughness={.95} opacity={.34} transparent/></mesh>}
   </group>;
 }
@@ -93,7 +93,7 @@ export function KnightPiece({x,z,y,color,level=1,active=false,theme,onClick}:{x:
   const shieldRot=active?-.18:.62;
   const pose=active?0:-.22;
   return <group position={[x,y+.02,z]} scale={scale} rotation={[0,pose,0]} onClick={onClick}>
-    <mesh position={[0,.035,0]} rotation={[-Math.PI/2,0,0]}><torusGeometry args={[.22,.025,8,24]}/><meshStandardMaterial color={active?"#c9a24a":"#4b4b47"} emissive={active?"#6d4f13":"#000"} emissiveIntensity={active?.35:0} roughness={.55}/></mesh>
+    <mesh position={[0,.035,0]} rotation={[-Math.PI/2,0,0]}><torusGeometry args={[.22,.025,8,24]}/><meshStandardMaterial color={active?"#c9a24a":"#4b4b47"} emissive={active?"#6d4f13":"#000"} emissiveIntensity={active ? .35 : 0} roughness={.55}/></mesh>
     <mesh position={[0,.19,0]} castShadow><cylinderGeometry args={[.10,.13,.30,8]}/><meshStandardMaterial color={body} roughness={.72}/></mesh>
     <mesh position={[0,.41,0]} castShadow><sphereGeometry args={[.105,12,10]}/><meshStandardMaterial color="#d8b08a" roughness={.82}/></mesh>
     <mesh position={[0,.50,0]} castShadow><coneGeometry args={[.13,.13,8]}/><meshStandardMaterial color={rank===3?"#c9a24a":"#4c5154"} metalness={.25} roughness={.55}/></mesh>
@@ -101,7 +101,7 @@ export function KnightPiece({x,z,y,color,level=1,active=false,theme,onClick}:{x:
       <mesh castShadow rotation={[Math.PI/2,0,0]}><cylinderGeometry args={[.13,.13,.035,8]}/><meshStandardMaterial color="#F6F2E7" roughness={.75}/></mesh>
       {Array.from({length:rank}).map((_,i)=><mesh key={i} position={[-.045+i*.045,.019,.035]}><boxGeometry args={[.018,.016,.08]}/><meshStandardMaterial color={color} roughness={.55}/></mesh>)}
     </group>
-    <mesh position={[-.10,.28,0]} rotation={[0,0,active?.08:.45]} castShadow><cylinderGeometry args={[.018,.018,.46,6]}/><meshStandardMaterial color="#6b4a2c" roughness={.9}/></mesh>
+    <mesh position={[-.10,.28,0]} rotation={[0,0,active ? .08 : .45]} castShadow><cylinderGeometry args={[.018,.018,.46,6]}/><meshStandardMaterial color="#6b4a2c" roughness={.9}/></mesh>
     {rank===3&&<mesh position={[0,.30,-.08]} rotation={[.18,0,0]}><planeGeometry args={[.28,.34]}/><meshStandardMaterial color={theme.visuals?.pieces.knight==="scout"?"#C88B6A":color} side={2} roughness={.85}/></mesh>}
   </group>;
 }

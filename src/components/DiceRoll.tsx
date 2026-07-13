@@ -38,6 +38,8 @@ export default function DiceRoll({ roll, eventDie=null }: { roll:[number,number]
       else setFaces([1+Math.floor(Math.random()*6),1+Math.floor(Math.random()*6)]);
     },70);
     return()=>window.clearInterval(id);
+  // A stable roll key intentionally controls the one-shot animation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[key]);
 
   return <div className="dice-roll" key={key}>

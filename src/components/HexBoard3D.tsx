@@ -5,7 +5,7 @@ import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Sky } from "@react-three/drei";
 import * as THREE from "three";
 import type { Group, Texture } from "three";
-import type { Board, Building, ResourceKey, TileResource } from "@/types/game";
+import type { Board, Building, TileResource } from "@/types/game";
 import type { ResourceTheme, Theme } from "@/types/theme";
 import { PLAYER_COLORS, RESOURCE_KEYS_ORDERED } from "@/game/constants";
 import { buildGeometry, HEX_SIZE } from "@/game/geometry";
@@ -47,6 +47,8 @@ function useTileTextures(urls: string[]): Record<string, Texture> {
       );
     }
     return () => { cancelled = true; };
+  // URL contents, not array identity, control loading.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urls.join("|")]);
 
   const loaded: Record<string, Texture> = {};
@@ -122,6 +124,8 @@ export default function HexBoard3D({
 }: HexBoard3DProps) {
   const visuals = theme.visuals ?? FALLBACK_VISUALS;
   const boardKey = board.tiles.map((tile) => `${tile.id}:${tile.resource}:${tile.token ?? ""}`).join("|");
+  // Online snapshots replace the array identity; boardKey tracks actual board content.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const geo = useMemo(() => buildGeometry(board.tiles), [boardKey]);
 
   const artUrls = useMemo(() => {
@@ -158,6 +162,8 @@ export default function HexBoard3D({
       heights[vertex.id] = height;
     }
     return heights;
+  // boardKey tracks tile content across serialized online snapshots.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo.vertices,boardKey]);
 
   const harbors = useMemo(() => deriveHarbors(board).map((harbor) => {
@@ -171,6 +177,8 @@ export default function HexBoard3D({
       key:`${harbor.mx}:${harbor.my}:${harbor.type}`, mx,mz,label:"2:1",sub:style.label.toUpperCase(),resource:harbor.type,accent:style.color,
       tip:`2:1 ${style.label} harbor — trade 2 ${style.label} cards for 1 card of your choice.`,
     };
+  // deriveHarbors depends on immutable board content represented by boardKey.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [boardKey,world,theme]);
 
   const hv = new Set(highlightVertices);

@@ -55,7 +55,7 @@ export default function BoardStage(props: BoardStageProps) {
     }
     cachedMode = webglAvailable() ? "3d" : "2d";
     setMode(cachedMode);
-  }, []);
+  }, [mode]);
 
   const fallback = <HexBoardPlay {...props} />;
   if (mode === "2d" || mode === "pending") return fallback;

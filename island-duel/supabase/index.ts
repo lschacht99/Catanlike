@@ -1,3 +1,4 @@
+// @ts-nocheck -- standalone Deno Edge Function, excluded from Next.js type validation
 // Standalone Hamsa Nomads Island Duel: Supabase Edge Function game host.
 // Deployed function name: hamsa-island-duel-v1
 // Keep separate from Catanlike's existing multiplayer server and engine.

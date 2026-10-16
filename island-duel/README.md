@@ -11,9 +11,11 @@ This is an **independent**, experimental two-phone browser game. It lives in a s
 | Isolated room-table migration | `island-duel/supabase/001_create_rooms.sql` |
 | GitHub Pages URL after deploying to `main` | `https://lschacht99.github.io/Catanlike/island-duel/index.html` |
 | Static-export path | `/Catanlike/island-duel/index.html` |
+| Complete asset browser | `/Catanlike/island-duel/assets/index.html` |
+| Independent asset directory | `public/island-duel/assets/` (62 illustrated WebP assets) |
 | Production backend (separate Supabase Edge Function) | `https://vvveenntewwtyhnmimal.supabase.co/functions/v1/hamsa-island-duel-v1` |
 
-The web client calls that Edge Function's `/api/*` endpoints directly. The previously shared Supabase function root is *not* the page hosting URL: some browser surfaces expose its HTML as source text. Open the GitHub Pages static document instead, once deployed.
+The web client calls that Edge Function's `/api/*` endpoints directly. Visual assets load as relative files from the game's separate `/island-duel/assets/` directory. The previously shared Supabase function root is *not* the page hosting URL: some browser surfaces expose its HTML as source text. Open the GitHub Pages static document instead, once deployed.
 
 ## Playing with two iPhones
 
@@ -26,7 +28,7 @@ The web client calls that Edge Function's `/api/*` endpoints directly. The previ
 
 A 19-hex board with numbered terrain, distinct public buildings and roads, red/yellow production dice, an event die with barbarian/science/trade/politics results, supplies and commodities, basic building and city improvements, knights, simplified barbarian attacks, a 13-point victory target, and private resource inventories. Refreshing a phone retains its seat token in that browser's local storage.
 
-**Not complete Cities & Knights.** This quick-start house-rules version deliberately omits robber/discard implementation, full progress-card decks, strict two-player neutral-player rules, normal setup rounds, certain placement restrictions and full barbarian resolution. The UI currently uses simple vector board geometry and emoji markers, **not** the full generated illustrated sprite sheets. Do not describe it as rules-complete or iOS-native.
+**Not complete Cities & Knights.** This quick-start house-rules version deliberately omits robber/discard implementation, full progress-card decks, strict two-player neutral-player rules, normal setup rounds, certain placement restrictions and full barbarian resolution. The UI now uses original illustrated forest/hills/pasture/fields/mountain/desert hexes, number markers, the corrected red/yellow/event dice, eight supplies, city/settlement/knight pieces, and Lulab/Mara portraits. A separate mobile-first art library at `/island-duel/assets/index.html` displays all 62 prepared art files, including two concept sheets. Some pieces (e.g., ports) remain future-rule assets rather than active game mechanics. Do not describe it as rules-complete or iOS-native.
 
 ## Safe deployment
 

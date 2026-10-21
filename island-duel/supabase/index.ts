@@ -44,9 +44,9 @@ function newGame(){
 const hdr=()=>({"apikey":KEY||"","Authorization":"Bearer "+KEY,"Content-Type":"application/json","Accept":"application/json"});
 async function db(path,method="GET",body,prefer){
  const h=hdr();if(prefer)h["Prefer"]=prefer;
- const r=await fetch(SUPA+"/rest/v1/"+TABLE+path,{method,headers:h,body:body?JSON.stringify(body):undefined});
+ const r=await fetch(SUPA+"/rest/v1/"+TABLE+path,{method,headers:h,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000)});
  const data=await r.json().catch(()=>null);
- if(!r.ok)throw Error("Storage unavailable ("+r.status+").");
+ if(!r.ok)throw new RequestFailure(503,"Storage is temporarily unavailable.");
  return data;
 }
 const get=async code=>(await db("?room_code=eq."+encodeURIComponent(code)+"&select=*"))?.[0];
@@ -115,12 +115,42 @@ function cleaned(row,id){
  const g=structuredClone(row.game);g.p[1-id].cards=null;
  return {room:row.room_code,joined:!!row.player_two_token,role:id,revision:row.revision,game:g};
 }
-function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*"}})}
+function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; frame-ancestors 'none'",...(status===429?{"retry-after":"60"}:{})}})}
 function randomString(n){const abc="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";return [...crypto.getRandomValues(new Uint8Array(n))].map(b=>abc[b%abc.length]).join("")}
+class RequestFailure extends Error {
+ constructor(status,message){super(message);this.status=status;}
+}
+async function readBody(req){
+ if((req.headers.get("content-type")||"").split(";")[0].trim().toLowerCase()!=="application/json")throw new RequestFailure(415,"Send a JSON request.");
+ const reader=req.body?.getReader();if(!reader)throw new RequestFailure(400,"Invalid request.");
+ const chunks=[];let size=0;
+ for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>8192){await reader.cancel();throw new RequestFailure(413,"Request is too large.");}chunks.push(value);}
+ const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new RequestFailure(400,"Invalid request.");}
+ if(!body||typeof body!=="object"||Array.isArray(body))throw new RequestFailure(400,"Invalid request.");
+ return body;
+}
+async function consumeLimit(value,limit){
+ // Existing service-only, atomic database quota. Never log IPs or credentials.
+ const hash=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("island-duel:"+value+":"+KEY));
+ const key=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,"0")).join("");
+ const r=await fetch(SUPA+"/rest/v1/rpc/hn_sidequest_rate",{method:"POST",headers:hdr(),body:JSON.stringify({p_key:key,p_limit:limit}),signal:AbortSignal.timeout(10000)});
+ if(!r.ok)throw new RequestFailure(503,"The game service is temporarily unavailable.");
+ const allowed=await r.json();if(allowed!==true)throw new RequestFailure(429,"Too many requests. Wait a minute and try again.");
+}
 async function api(req,u){
  try {
   const method=u.pathname.split("/").pop();
-  const b=req.method==="POST"?await req.json().catch(()=>({})):{};
+  if(!["create","join","state","action"].includes(method))return json({error:"Unknown API endpoint."},404);
+  if(req.method!==(method==="state"?"GET":"POST"))return json({error:"Method not allowed."},405);
+  const b=req.method==="POST"?await readBody(req):{};
+  const ip=(req.headers.get("cf-connecting-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown").slice(0,128);
+  await consumeLimit("ip:"+ip,180);
+  if(method==="create"){
+   // A shared ceiling also bounds storage growth when IP attribution is unavailable/spoofed.
+   await consumeLimit("create:all",60);await consumeLimit("create:"+ip,3);
+  }
+  if(method==="join")await consumeLimit("join:"+ip,20);
   if(method==="create"){
     check(req.method==="POST","Use POST.");const code=randomString(8),token=crypto.randomUUID();
     await db("","POST",{room_code:code,player_one_token:token,player_two_token:null,game:newGame(),revision:0},"return=minimal");
@@ -132,9 +162,9 @@ async function api(req,u){
   if(method==="join"){
     check(req.method==="POST","Use POST.");check(!row.player_two_token,"Room is already full.");const token=crypto.randomUUID();await update(code,row.revision,{player_two_token:token});return json({room:code,token,role:1});
   }
-  const token=String(b.token||u.searchParams.get("token")||"");
+  const token=String(req.headers.get("X-Game-Token")||b.token||u.searchParams.get("token")||"");
   const id=token&&token===row.player_one_token?0:token&&token===row.player_two_token?1:-1;
-  check(id>=0,"Room access denied.");
+  if(id<0)throw new RequestFailure(401,"Room access denied.");
   if(method==="state")return json(cleaned(row,id));
   if(method==="action"){
     check(req.method==="POST","Use POST.");check(row.player_two_token,"Wait for the second phone to join.");
@@ -143,7 +173,7 @@ async function api(req,u){
     return json(cleaned(updated,id));
   }
   return json({error:"Unknown API endpoint."},404);
- }catch(e){return json({error:String(e.message||e)},400)}
+ }catch(e){return json({error:e instanceof RequestFailure?e.message:e instanceof TypeError?"The game service is temporarily unavailable.":String(e.message||"Invalid request.")},e instanceof RequestFailure?e.status:e instanceof TypeError?503:400)}
 }
 const HTML=String.raw`
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -179,7 +209,7 @@ var ti={forest:"🌲",hills:"🧱",pasture:"🐑",fields:"🌾",mountains:"⛰�
 var graph=function(){var V=[],E=[],H=[],vm={},em={};for(var r=-2;r<=2;r++)for(var q=-2;q<=2;q++)if(Math.abs(q+r)<=2){var cx=Math.sqrt(3)*(q+r/2),cy=1.5*r,cc=[],ee=[];for(var i=0;i<6;i++){var a=i*Math.PI/3+Math.PI/6,x=cx+Math.cos(a),y=cy+Math.sin(a),k=Math.round(x*10000)+":"+Math.round(y*10000);if(vm[k]===undefined){vm[k]=V.length;V.push({x:x,y:y})}cc.push(vm[k])}for(var j=0;j<6;j++){var a1=Math.min(cc[j],cc[(j+1)%6]),b1=Math.max(cc[j],cc[(j+1)%6]),ek=a1+":"+b1;if(em[ek]===undefined){em[ek]=E.length;E.push([a1,b1])}ee.push(em[ek])}H.push({x:cx,y:cy,c:cc})}return {V:V,E:E,H:H}}();
 var el=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function notice(t){var n=el("toast");n.textContent=t;n.classList.add("on");setTimeout(()=>n.classList.remove("on"),3300)}
-async function api(method,data){var path=method==="state"?"state?room="+encodeURIComponent(session.room)+"&token="+encodeURIComponent(session.token):method;var opt=method==="state"?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)};var res=await fetch(API+path,opt);var j=await res.json();if(!res.ok)throw Error(j.error||"Network error");return j}
+async function api(method,data){var path=method==="state"?"state?room="+encodeURIComponent(session.room):method;var opt=method==="state"?{headers:{"X-Game-Token":session.token}}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)};var res=await fetch(API+path,opt);var j=await res.json();if(!res.ok)throw Error(j.error||"Network error");return j}
 function valid(){return state&&state.joined&&state.game.turn===session.role&&state.game.phase!=="finished"}
 function canAct(){return valid()&&state.game.phase==="actions"}
 function update(s){state=s;var lobby=el("lobby"),game=el("game");lobby.classList.add("hidden");game.classList.remove("hidden");el("roomLabel").textContent="ROOM "+s.room;el("roomCode").textContent=s.room;render()}
@@ -230,8 +260,9 @@ if(session?.token&&session?.room)entered(session);else{el("lobby").classList.rem
 `;
 Deno.serve(async(req)=>{
  const u=new URL(req.url);
- if(req.method==="OPTIONS")return new Response(null,{headers:{"access-control-allow-origin":"*","access-control-allow-methods":"POST, GET, OPTIONS","access-control-allow-headers":"content-type"}});
+ if(req.method==="OPTIONS")return new Response(null,{headers:{"access-control-allow-origin":"*","access-control-allow-methods":"POST, GET, OPTIONS","access-control-allow-headers":"content-type,x-game-token"}});
  if(u.pathname.includes("/api/"))return api(req,u);
  if(req.method!=="GET")return new Response("Method not allowed",{status:405});
- return new Response(HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
+ return new Response(HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"}});
 });
+

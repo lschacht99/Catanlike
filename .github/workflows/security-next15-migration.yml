@@ -25,10 +25,7 @@ jobs:
         run: npm test
       - name: Verify Next.js application build
         run: npm run build
-      - name: Security audit, high and critical
-        run: npm audit --audit-level=high --omit=dev
       - name: Persist validated dependency lockfile to migration branch
-        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -37,3 +34,5 @@ jobs:
             git commit -m "security: regenerate lockfile for Next.js 15 patched release [skip ci]"
             git push origin HEAD:security/2026-10-next15-migration
           fi
+      - name: Security audit, high and critical
+        run: npm audit --audit-level=high --omit=dev

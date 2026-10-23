@@ -25,6 +25,10 @@ jobs:
         run: npm test
       - name: Verify Next.js application build
         run: npm run build
+      - name: Verify GitHub Pages export
+        run: |
+          npm run pages:build
+          test -f out/index.html
       - name: Persist validated dependency lockfile to migration branch
         run: |
           git config user.name "github-actions[bot]"

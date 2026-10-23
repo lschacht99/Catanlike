@@ -17,6 +17,8 @@ jobs:
           node-version: '24.22.1'
       - name: Generate refreshed lockfile without lifecycle scripts
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Apply compatible audited dependency fixes
+        run: npm audit fix --package-lock-only --ignore-scripts --no-fund || true
       - name: Install exact resolved dependencies
         run: npm ci --no-fund
       - name: Run unit tests
